@@ -687,16 +687,19 @@
     if (state.ghost) drawCar(scene, state.ghost.car, pal.cyan, 0.5);
     drawCar(scene, race.car, pal.ink, 1);
 
+    const speedRatio = E.clamp(race.car.speed / 60, 0, 1);
+    const probeY = Math.floor(VIEW_H * (0.8 - speedRatio * 0.34));
     ctx.strokeStyle = rgbString(pal.ink, 0.7);
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(VIEW_W * 0.5, VIEW_H * 0.8, 5, 0, Math.PI * 2);
+    ctx.arc(VIEW_W * 0.5, probeY, 5, 0, Math.PI * 2);
     ctx.stroke();
   }
 
   function probeLod() {
+    const speedRatio = E.clamp(state.race.car.speed / 60, 0, 1);
     const x = Math.floor(VIEW_W * 0.5);
-    const y = Math.floor(VIEW_H * 0.8);
+    const y = Math.floor(VIEW_H * (0.8 - speedRatio * 0.34));
     const lambda = state.target.lod[y * VIEW_W + x];
     state.probe.lambda = lambda;
     const max = state.pyramid.maxLevel;
