@@ -784,8 +784,11 @@
     }
     const lambda = state.probe.lambda;
     const lambdaText = lambda < -50 ? 'sky' : lambda.toFixed(2);
-    if (state.mode === E.SAMPLE_TRILINEAR) {
+    if (state.mode === E.SAMPLE_TRILINEAR && state.probe.level > lo) {
       $('pyramidNote').textContent = 'Blending level ' + lo + ' and level ' + hi + ' at lambda ' + lambdaText + '.';
+    } else if (state.mode === E.SAMPLE_TRILINEAR) {
+      /* lambda at or below a whole level (below zero near the car) has no fraction to blend. */
+      $('pyramidNote').textContent = 'Trilinear reads only level ' + lo + ' while lambda is ' + lambdaText + '.';
     } else {
       $('pyramidNote').textContent = MODE_NAMES[state.mode] + ' stays on level 0 while lambda is ' + lambdaText + '.';
     }

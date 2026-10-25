@@ -386,7 +386,13 @@ test('the inspector panels fill in their notes while the pace car drives', () =>
   const { env, app } = boot();
   env.runFrames(600);
   assert.equal(app.state.race.phase, 'running');
-  assert.match(env.elements.pyramidNote.textContent, /^Blending level \d and level \d at lambda -?\d+\.\d\d\.$/);
+  const level = app.state.probe.level;
+  if (level > Math.floor(level)) {
+    assert.match(env.elements.pyramidNote.textContent, /^Blending level \d and level \d at lambda -?\d+\.\d\d\.$/);
+  } else {
+    // A whole level has nothing to blend, so the note must not claim a blend.
+    assert.match(env.elements.pyramidNote.textContent, /^Trilinear reads only level \d while lambda is -?\d+\.\d\d\.$/);
+  }
   assert.match(env.elements.frameNote.textContent, /^Mean \d+\.\d ms, 95th percentile \d+\.\d ms, worst \d+\.\d ms\. The line marks 16\.7 ms\.$/);
   assert.match(env.elements.hashNote.textContent, /^\d+ cells hold \d+ entries, at most \d+ in one\. The car checked \d+ candidates and ran SAT on \d+\.$/);
   assert.match(env.elements.tSlip.textContent, /^\d+\.\d deg$/);
