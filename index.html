@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mipmap Arcade: LodZero, a racer built without an engine</title>
+  <meta name="description" content="LodZero is an arcade racer and software rasterizer workbench in plain JavaScript. Switch between point, bilinear and trilinear texture sampling while you drive and watch the level of detail heatmap.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#arcade">Skip to the game</a>
+
+  <header class="masthead">
+    <a class="brand" href="#top" aria-label="Mipmap Arcade, top of page">
+      <svg class="brand-mark" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true" focusable="false">
+        <rect x="2" y="2" width="28" height="28" rx="4" class="mark-frame"></rect>
+        <rect x="6" y="6" width="12" height="12" class="mark-l0"></rect>
+        <rect x="20" y="6" width="6" height="6" class="mark-l1"></rect>
+        <rect x="20" y="14" width="3" height="3" class="mark-l2"></rect>
+        <rect x="20" y="19" width="1.5" height="1.5" class="mark-l3"></rect>
+      </svg>
+      <span class="brand-name">Mipmap Arcade</span>
+    </a>
+    <nav class="top-nav" aria-label="Sections">
+      <a href="#arcade">Play</a>
+      <a href="#how">How it works</a>
+      <a href="#honesty">Honest notes</a>
+      <a href="https://github.com/draarivpatel-ui/mipmap-arcade" rel="noopener">Source</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="intro" aria-labelledby="title">
+      <h1 id="title">LodZero</h1>
+      <p class="lede">An arcade racer whose road is a texture. Switch between point, bilinear and trilinear sampling while you drive, and slide the split to see which mip level every pixel is reading.</p>
+    </section>
+
+    <section id="arcade" class="arcade" aria-label="Game and engine inspector">
+      <div class="stage">
+        <div class="viewport" id="viewport" tabindex="0" aria-describedby="keys-help">
+          <canvas id="view" width="480" height="270" role="img" aria-label="Chase camera view of a racing track rendered by a software rasterizer. The right side of the split shows a level of detail heatmap."></canvas>
+          <div class="hud" aria-hidden="true">
+            <div class="hud-cell"><span class="hud-value" id="hudSpeed">0</span><span class="hud-unit">km/h</span></div>
+            <div class="hud-cell"><span class="hud-value" id="hudLap">Lap 1 of 3</span></div>
+            <div class="hud-cell"><span class="hud-value" id="hudTime">0:00.0</span><span class="hud-unit" id="hudBest">no best yet</span></div>
+          </div>
+          <div class="countdown" id="countdown" aria-hidden="true">3</div>
+          <p class="toast" id="toast" hidden></p>
+          <p class="mode-badge" id="modeBadge">Pace car driving</p>
+        </div>
+        <div class="split-control">
+          <label for="split">Heatmap split</label>
+          <input type="range" id="split" min="0" max="100" step="1" value="55">
+          <output id="splitValue" for="split">55%</output>
+        </div>
+        <div class="legend" aria-hidden="true">
+          <span>Level 0, full detail</span>
+          <span class="legend-bar"></span>
+          <span>Level 8, one texel</span>
+        </div>
+        <p id="keys-help" class="keys-help">Steer with A and D or the arrow keys. W accelerates, S brakes. Hold Space to drift, release to boost. Keys 1, 2 and 3 pick the sampling mode. P toggles the pace car, M mutes, R restarts. Press any driving key to take over from the pace car.</p>
+        <div class="touch-controls" id="touch" aria-label="On-screen controls">
+          <button type="button" class="touch-btn" data-touch="left" aria-label="Steer left">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </button>
+          <button type="button" class="touch-btn" data-touch="right" aria-label="Steer right">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </button>
+          <button type="button" class="touch-btn touch-wide" data-touch="drift">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M13 3 5 14h6l-1 7 8-11h-6z" fill="currentColor"></path></svg>
+            <span>Drift and boost</span>
+          </button>
+          <button type="button" class="touch-btn" data-touch="brake" aria-label="Brake">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"></rect></svg>
+          </button>
+          <button type="button" class="touch-btn" data-touch="gas" aria-label="Accelerate">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M12 4 5 20l7-4 7 4z" fill="currentColor"></path></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="panels">
+        <section class="panel" aria-labelledby="h-sampling">
+          <h2 id="h-sampling">Sampling</h2>
+          <div class="segmented" role="radiogroup" aria-label="Texture sampling mode">
+            <button type="button" role="radio" class="seg" id="modePoint" data-mode="0" aria-checked="false">Point</button>
+            <button type="button" role="radio" class="seg" id="modeBilinear" data-mode="1" aria-checked="false">Bilinear</button>
+            <button type="button" role="radio" class="seg" id="modeTrilinear" data-mode="2" aria-checked="true">Trilinear</button>
+          </div>
+          <p class="panel-note" id="modeNote">Trilinear blends two pyramid levels by the fraction of lambda.</p>
+        </section>
+
+        <section class="panel" aria-labelledby="h-drive">
+          <h2 id="h-drive">Drive</h2>
+          <div class="button-row">
+            <button type="button" class="btn btn-primary" id="btnStart">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M7 4.5v15l12-7.5z" fill="currentColor"></path></svg>
+              <span>Start race</span>
+            </button>
+            <button type="button" class="btn" id="btnPace" aria-pressed="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M5 21V4m0 0h12l-2 4 2 4H5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              <span>Pace car</span>
+            </button>
+            <button type="button" class="btn" id="btnTrack">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              <span>New track</span>
+            </button>
+            <button type="button" class="btn" id="btnSound" aria-pressed="false">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M4 9v6h4l5 4V5L8 9zM16.5 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              <span id="soundLabel">Sound off</span>
+            </button>
+          </div>
+          <p class="panel-note" id="seedNote">Track seed 2026</p>
+        </section>
+
+        <section class="panel" aria-labelledby="h-telemetry">
+          <h2 id="h-telemetry">Telemetry</h2>
+          <dl class="telemetry">
+            <div><dt>Slip angle</dt><dd id="tSlip">0.0 deg</dd></div>
+            <div><dt>Lambda at probe</dt><dd id="tLambda">0.00</dd></div>
+            <div><dt>Level read</dt><dd id="tLevel">0</dd></div>
+            <div><dt>Gates</dt><dd id="tGates">0 of 8</dd></div>
+            <div><dt>Energy cells</dt><dd id="tCells">0</dd></div>
+            <div><dt>Pylon hits</dt><dd id="tPylons">0</dd></div>
+          </dl>
+          <div class="meters">
+            <label for="mBoost">Boost charge</label>
+            <meter id="mBoost" min="0" max="1" low="0.25" value="0">0</meter>
+            <label for="mHeat">Boost heat</label>
+            <meter id="mHeat" min="0" max="1" high="0.7" optimum="0" value="0">0</meter>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="h-pyramid">
+          <h2 id="h-pyramid">Mip pyramid</h2>
+          <canvas id="pyramidCanvas" class="panel-canvas" width="288" height="136" role="img" aria-label="The nine mip levels of the ground texture, from 256 by 256 down to 1 by 1, with the levels currently being read outlined."></canvas>
+          <p class="panel-note" id="pyramidNote">Reading level 0.</p>
+        </section>
+
+        <section class="panel" aria-labelledby="h-frame">
+          <h2 id="h-frame">Frame time</h2>
+          <canvas id="frameCanvas" class="panel-canvas" width="288" height="96" role="img" aria-label="Bar chart of the last 120 frame times in milliseconds."></canvas>
+          <p class="panel-note" id="frameNote">Warming up.</p>
+        </section>
+
+        <section class="panel" aria-labelledby="h-hash">
+          <h2 id="h-hash">Spatial hash</h2>
+          <canvas id="hashCanvas" class="panel-canvas" width="288" height="216" role="img" aria-label="Top-down map of the track divided into spatial hash cells. Occupied cells are shaded and the cells the car queries are outlined."></canvas>
+          <p class="panel-note" id="hashNote">Waiting for the first step.</p>
+        </section>
+      </div>
+    </section>
+
+    <div class="announcer" id="announcer" role="status" aria-live="polite"></div>
+
+    <section id="how" class="how" aria-labelledby="h-how">
+      <h2 id="h-how" class="section-title">How it works</h2>
+      <div class="how-grid">
+        <article>
+          <h3>One file of engine, no engine</h3>
+          <p>Everything under the hood lives in <code>engine.js</code>: the physics, the collision, the track, the texture filters and the rasterizer. There is no game engine, no graphics library and no dependency. The page only paints the finished pixel buffer to a 2D canvas.</p>
+        </article>
+        <article>
+          <h3>The road is a texture</h3>
+          <p>Each pixel below the horizon is cast onto the ground plane. The texture footprint of that pixel comes from an exact Jacobian, not an estimate, and lambda is the base two logarithm of the larger of its two edge lengths measured in texels.</p>
+        </article>
+        <article>
+          <h3>Three ways to read it</h3>
+          <p>Point and bilinear sampling stay on the full size level, so distant stripes crawl and shimmer. Trilinear sampling blends the two pyramid levels around lambda, which is why the horizon stays calm.</p>
+        </article>
+        <article>
+          <h3>Same run, every time</h3>
+          <p>The simulation advances in fixed steps of one hundred and twentieth of a second. Inputs are quantized and run length encoded, so a ghost is just a short byte string that replays to the exact same position.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="honesty" class="how honesty" aria-labelledby="h-honesty">
+      <h2 id="h-honesty" class="section-title">Honest notes</h2>
+      <p class="prose">This project was written with AI assistance. Hack Club Mipmap counts AI-written code at a discount and does not allow retyping an entire model-written project, so this repository is a disclosed reference build and is not a Mipmap entry. The tests are automated checks that run in Node, and the visual result was checked in a real browser. No human playtesting has been done. The full details are in <a href="https://github.com/draarivpatel-ui/mipmap-arcade/blob/main/NOTES.md" rel="noopener">NOTES.md</a>.</p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>MIT licensed. Plain HTML, CSS and JavaScript, with no build step.</p>
+  </footer>
+
+  <script src="engine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

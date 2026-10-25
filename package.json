@@ -1,0 +1,18 @@
+{
+  "name": "mipmap-arcade",
+  "version": "1.0.0",
+  "description": "LodZero: an engine-free canvas arcade racer and software rasterizer workbench with live point, bilinear and trilinear mipmap sampling.",
+  "private": true,
+  "license": "MIT",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test",
+    "start": "python3 -m http.server 8080"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/draarivpatel-ui/mipmap-arcade.git"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
