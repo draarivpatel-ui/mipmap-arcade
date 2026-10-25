@@ -913,3 +913,57 @@ test('the heads up display clamps the lap counter at the final lap', () => {
   assert.equal(env.elements.countdown.hidden, true);
   assert.match(env.elements.hudTime.textContent, /^\d:\d\d\.\d$/);
 });
+
+/* ---------------------------------------------------------------- */
+/* split grip, countdown beat and chart labels                       */
+/* ---------------------------------------------------------------- */
+
+test('the split follows the slider into a style variable the grip and divider read', () => {
+  const { env, app } = boot();
+  assert.equal(env.elements.viewport.style['--split'], '55%');
+  app.setSplit(0.8);
+  assert.equal(env.elements.viewport.style['--split'], '80%');
+  assert.match(html, /id="splitGrip"[^>]*aria-hidden="true"/);
+  assert.match(css, /left:\s*var\(--split\)/);
+});
+
+test('dragging the grip moves the split and letting go stops it', () => {
+  const { env, app } = boot();
+  env.elements.viewport.getBoundingClientRect = () => ({ left: 100, width: 400 });
+  const grip = env.elements.splitGrip;
+  grip.emit('pointermove', { clientX: 140 });
+  assert.equal(app.state.split, 0.55, 'a move without a press does nothing');
+  grip.emit('pointerdown');
+  assert.equal(grip.dataset.dragging, 'true');
+  grip.emit('pointermove', { clientX: 200 });
+  assert.equal(app.state.split, 0.25);
+  assert.equal(env.elements.split.value, '25');
+  grip.emit('pointermove', { clientX: 900 });
+  assert.equal(app.state.split, 1);
+  grip.emit('pointerup');
+  assert.equal(grip.dataset.dragging, 'false');
+  grip.emit('pointermove', { clientX: 120 });
+  assert.equal(app.state.split, 1);
+});
+
+test('the countdown flips its beat flag each time the number changes', () => {
+  const { env } = boot();
+  env.runFrames(30);
+  const first = env.elements.countdown.dataset.beat;
+  assert.ok(first === 'a' || first === 'b');
+  env.runFrames(2);
+  assert.equal(env.elements.countdown.dataset.beat, first, 'same number, same beat');
+  const number = env.elements.countdown.textContent;
+  for (let i = 0; i < 90 && env.elements.countdown.textContent === number; i++) env.runFrames(1);
+  assert.notEqual(env.elements.countdown.textContent, number);
+  assert.notEqual(env.elements.countdown.dataset.beat, first);
+});
+
+test('the pyramid and frame charts write their labels onto the canvas', () => {
+  const { env } = boot();
+  env.runFrames(40);
+  assert.ok(env.elements.pyramidCanvas.getContext().__state.calls.fillText >= 9, 'one label per level');
+  assert.ok(env.elements.frameCanvas.getContext().__state.calls.fillText >= 2);
+  assert.match(html, /Within the 16\.7 ms budget/);
+  assert.match(html, /Cells the car queries/);
+});

@@ -191,12 +191,15 @@
       neutral: token('heat-neutral'),
       divider: token('divider'),
       ink: token('ink'),
+      inkSoft: token('ink-2'),
+      vermilionInk: token('vermilion-ink'),
       paper: token('paper'),
       paper2: token('paper-2'),
       rule: token('rule'),
       vermilion: token('vermilion'),
       cyan: token('cyan'),
-      amber: token('amber')
+      amber: token('amber'),
+      fontMono: style.getPropertyValue('--font-mono')
     };
   }
 
@@ -354,6 +357,36 @@
     const pct = Math.round(state.split * 100);
     $('split').value = String(pct);
     $('splitValue').textContent = pct + '%';
+    const style = $('viewport').style;
+    if (style.setProperty) style.setProperty('--split', pct + '%');
+    else style['--split'] = pct + '%';
+  }
+
+  function bindSplitGrip() {
+    const grip = $('splitGrip');
+    const viewport = $('viewport');
+    let dragging = false;
+    function move(event) {
+      if (!dragging || !viewport.getBoundingClientRect) return;
+      const rect = viewport.getBoundingClientRect();
+      if (rect.width > 0) setSplit((event.clientX - rect.left) / rect.width);
+    }
+    function end(event) {
+      dragging = false;
+      grip.dataset.dragging = 'false';
+      if (grip.releasePointerCapture && event && event.pointerId !== undefined) {
+        try { grip.releasePointerCapture(event.pointerId); } catch (error) { /* capture already gone */ }
+      }
+    }
+    grip.addEventListener('pointerdown', function (event) {
+      event.preventDefault();
+      dragging = true;
+      grip.dataset.dragging = 'true';
+      if (grip.setPointerCapture && event.pointerId !== undefined) grip.setPointerCapture(event.pointerId);
+    });
+    grip.addEventListener('pointermove', move);
+    grip.addEventListener('pointerup', end);
+    grip.addEventListener('pointercancel', end);
   }
 
   function togglePace() {
@@ -699,6 +732,13 @@
     return levelCanvases[l];
   }
 
+  /* x offsets of levels 2 and up, laid out left to right with a six pixel gap */
+  function rowOffset(level) {
+    let x = 0;
+    for (let l = 2; l < level; l++) x += Math.max(1, (256 >> l) * 0.5) + 6;
+    return x;
+  }
+
   function drawPyramid() {
     const c = $('pyramidCanvas').getContext('2d');
     const pal = state.palette;
@@ -709,23 +749,38 @@
     const lo = Math.floor(state.probe.level);
     const hi = Math.min(lo + 1, state.pyramid.maxLevel);
     const scale = 0.5;
-    let x = 4;
-    let y = 4;
+    c.font = '600 10px ' + pal.fontMono;
+    c.textBaseline = 'middle';
+    const tiny = [];
     for (let l = 0; l < state.pyramid.count; l++) {
       const level = state.pyramid.levels[l];
       const lw = Math.max(1, level.width * scale);
       const lh = Math.max(1, level.height * scale);
-      if (l === 1) {
-        x = 4 + 128 + 6;
-        y = 4;
-      } else if (l > 1) {
-        y += Math.max(1, state.pyramid.levels[l - 1].height * scale) + 4;
-      }
+      /* level 0 on the left, level 1 beside it, the small levels in one row under level 1 */
+      const x = l === 0 ? 4 : l === 1 ? 138 : 138 + rowOffset(l);
+      const y = l <= 1 ? 4 : 76;
       c.drawImage(levelCanvas(l), x, y, lw, lh);
       const active = l === lo || (state.mode === E.SAMPLE_TRILINEAR && l === hi && state.probe.level > lo);
       c.strokeStyle = rgbString(active ? pal.vermilion : pal.rule);
       c.lineWidth = active ? 2 : 1;
       c.strokeRect(x - 0.5, y - 0.5, lw + 1, lh + 1);
+      const size = level.width + (level.width === level.height ? '' : 'x' + level.height);
+      const color = rgbString(active ? pal.vermilionInk : pal.inkSoft);
+      if (l === 0) {
+        c.fillStyle = rgbString(pal.paper, 0.92);
+        c.fillRect(x + 4, y + lh - 19, 76, 15);
+        c.fillStyle = rgbString(active ? pal.vermilionInk : pal.ink);
+        c.fillText('L0  ' + size + ' px', x + 8, y + lh - 11);
+      } else if (l === 1) {
+        c.fillStyle = color;
+        c.fillText('L1  ' + size, x + lw + 6, y + lh / 2);
+      } else {
+        tiny.push({ text: 'L' + l + ' ' + size, color: color });
+      }
+    }
+    for (let i = 0; i < tiny.length; i++) {
+      c.fillStyle = tiny[i].color;
+      c.fillText(tiny[i].text, 138 + (i % 4) * 37, 118 + Math.floor(i / 4) * 13);
     }
     const lambda = state.probe.lambda;
     const lambdaText = lambda < -50 ? 'sky' : lambda.toFixed(2);
@@ -759,6 +814,17 @@
     c.moveTo(0, line);
     c.lineTo(w, line);
     c.stroke();
+    c.font = '600 10px ' + pal.fontMono;
+    c.textBaseline = 'alphabetic';
+    c.fillStyle = rgbString(pal.inkSoft);
+    c.textAlign = 'left';
+    c.fillText(maxMs + ' ms', 6, 13);
+    c.fillStyle = rgbString(pal.paper2, 0.9);
+    c.fillRect(w - 98, line - 17, 94, 13);
+    c.textAlign = 'right';
+    c.fillStyle = rgbString(pal.ink);
+    c.fillText('16.7 ms, 60 fps', w - 6, line - 5);
+    c.textAlign = 'left';
     $('frameNote').textContent = frameStats.count > 0
       ? 'Mean ' + frameStats.mean().toFixed(1) + ' ms, 95th percentile ' + frameStats.percentile(0.95).toFixed(1) +
         ' ms, worst ' + frameStats.worst().toFixed(1) + ' ms. The line marks 16.7 ms.'
@@ -819,6 +885,14 @@
 
   /* HUD and telemetry --------------------------------------------------- */
 
+  /* Alternating the beat flag swaps the animation name, which restarts the pop in CSS. */
+  function setCountdownText(text) {
+    const el = $('countdown');
+    if (el.textContent === text) return;
+    el.textContent = text;
+    el.dataset.beat = el.dataset.beat === 'a' ? 'b' : 'a';
+  }
+
   function syncHud() {
     const race = state.race;
     const car = race.car;
@@ -829,10 +903,10 @@
     $('hudBest').textContent = state.best === null ? 'no best yet' : 'best ' + formatTime(state.best);
     if (race.phase === 'countdown') {
       $('countdown').hidden = false;
-      $('countdown').textContent = String(Math.ceil(race.countdown));
+      setCountdownText(String(Math.ceil(race.countdown)));
     } else if (race.phase === 'running' && race.time < 0.6) {
       $('countdown').hidden = false;
-      $('countdown').textContent = 'Go';
+      setCountdownText('Go');
     } else {
       $('countdown').hidden = true;
     }
@@ -920,6 +994,7 @@
     win.addEventListener('blur', releaseAll);
     doc.addEventListener('visibilitychange', releaseAll);
     bindTouch();
+    bindSplitGrip();
 
     const modeIds = ['modePoint', 'modeBilinear', 'modeTrilinear'];
     modeIds.forEach(function (id, index) {

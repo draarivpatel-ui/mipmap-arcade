@@ -47,6 +47,7 @@
   --tap: 44px;
   --panel-width: 22.5rem;
   --page-width: 82rem;
+  --split: 55%;
 }
 
 *,
@@ -289,6 +290,36 @@ main {
   white-space: nowrap;
 }
 
+.split-grip {
+  position: absolute;
+  left: var(--split);
+  top: 30%;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: -1.375rem 0 0 -1.375rem;
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  box-shadow: 0 2px 0 var(--ink);
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.split-grip:hover,
+.split-grip[data-dragging="true"] {
+  background: var(--vermilion);
+}
+
+.split-grip[data-dragging="true"] {
+  box-shadow: none;
+  transform: translateY(2px);
+}
+
 .countdown {
   position: absolute;
   inset: 0;
@@ -298,7 +329,36 @@ main {
   font-weight: 800;
   letter-spacing: -0.04em;
   color: var(--ink);
+  text-shadow: 0 0 0.12em var(--paper), 0 0 0.35em var(--paper);
   pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .countdown[data-beat="a"] {
+    animation: beat-a 0.9s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  }
+
+  .countdown[data-beat="b"] {
+    animation: beat-b 0.9s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  }
+
+  .btn,
+  .seg,
+  .touch-btn {
+    transition: background-color 0.12s ease, color 0.12s ease, transform 0.08s ease;
+  }
+}
+
+@keyframes beat-a {
+  from { opacity: 0; transform: scale(1.6); }
+  35% { opacity: 1; transform: scale(1); }
+  to { opacity: 1; transform: scale(0.94); }
+}
+
+@keyframes beat-b {
+  from { opacity: 0; transform: scale(1.6); }
+  35% { opacity: 1; transform: scale(1); }
+  to { opacity: 1; transform: scale(0.94); }
 }
 
 .countdown[hidden] {
@@ -402,9 +462,20 @@ main {
   -webkit-user-select: none;
 }
 
-@media (pointer: coarse) {
+@media (pointer: coarse), (max-width: 40rem) {
+  .stage {
+    display: flex;
+    flex-direction: column;
+  }
+
   .touch-controls {
     display: grid;
+    order: 1;
+    margin-bottom: var(--space-3);
+  }
+
+  .keys-help {
+    order: 2;
   }
 }
 
@@ -525,6 +596,12 @@ main {
   background: var(--paper-2);
 }
 
+.btn:active,
+.seg:active,
+.touch-btn:active {
+  transform: translateY(1px);
+}
+
 .btn[aria-pressed="true"] {
   background: var(--ink);
   color: var(--paper);
@@ -578,6 +655,79 @@ main {
 .meters meter {
   width: 100%;
   height: 1.1rem;
+}
+
+.key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-2);
+  font-size: 0.85rem;
+}
+
+.key li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.swatch {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 2px;
+  flex: none;
+}
+
+.swatch-cyan {
+  background: var(--cyan);
+}
+
+.swatch-vermilion {
+  background: var(--vermilion);
+}
+
+.swatch-amber {
+  background: color-mix(in srgb, var(--amber) 70%, var(--paper-2));
+}
+
+.swatch-outline {
+  border: 2px solid var(--vermilion);
+}
+
+.meters meter {
+  appearance: none;
+  background: var(--paper-3);
+  border: var(--hairline) solid var(--rule);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.meters meter::-webkit-meter-bar {
+  background: var(--paper-3);
+  border: 0;
+  height: 100%;
+}
+
+.meters meter::-webkit-meter-optimum-value,
+.meters meter::-webkit-meter-suboptimum-value {
+  background: var(--cyan);
+  border-radius: 999px;
+}
+
+.meters meter::-webkit-meter-even-less-good-value {
+  background: var(--vermilion);
+  border-radius: 999px;
+}
+
+.meters meter::-moz-meter-bar {
+  background: var(--cyan);
+}
+
+.meters meter:-moz-meter-sub-sub-optimum::-moz-meter-bar {
+  background: var(--vermilion);
 }
 
 /* Explainer ----------------------------------------------------------- */
@@ -678,5 +828,16 @@ main {
 
   .hud-unit {
     display: none;
+  }
+
+  .touch-wide svg {
+    display: none;
+  }
+
+  .touch-btn {
+    white-space: normal;
+    line-height: 1.1;
+    text-align: center;
+    padding: 0 var(--space-2);
   }
 }

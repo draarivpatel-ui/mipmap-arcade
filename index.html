@@ -53,6 +53,9 @@
             <div class="hud-cell"><span class="hud-value" id="hudLap">Lap 1 of 3</span></div>
             <div class="hud-cell"><span class="hud-value" id="hudTime">0:00.0</span><span class="hud-unit" id="hudBest">no best yet</span></div>
           </div>
+          <div class="split-grip" id="splitGrip" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M9 6 3 12l6 6M15 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </div>
           <div class="countdown" id="countdown" aria-hidden="true">3</div>
           <p class="toast" id="toast" hidden></p>
           <p class="mode-badge" id="modeBadge">Pace car driving</p>
@@ -149,12 +152,20 @@
         <section class="panel" aria-labelledby="h-frame">
           <h2 id="h-frame">Frame time</h2>
           <canvas id="frameCanvas" class="panel-canvas" width="288" height="96" role="img" aria-label="Bar chart of the last 120 frame times in milliseconds."></canvas>
+          <ul class="key" aria-label="Chart key">
+            <li><span class="swatch swatch-cyan"></span>Within the 16.7 ms budget</li>
+            <li><span class="swatch swatch-vermilion"></span>Over budget</li>
+          </ul>
           <p class="panel-note" id="frameNote">Warming up.</p>
         </section>
 
         <section class="panel" aria-labelledby="h-hash">
           <h2 id="h-hash">Spatial hash</h2>
           <canvas id="hashCanvas" class="panel-canvas" width="288" height="216" role="img" aria-label="Top-down map of the track divided into spatial hash cells. Occupied cells are shaded and the cells the car queries are outlined."></canvas>
+          <ul class="key" aria-label="Chart key">
+            <li><span class="swatch swatch-amber"></span>Occupied cell</li>
+            <li><span class="swatch swatch-outline"></span>Cells the car queries</li>
+          </ul>
           <p class="panel-note" id="hashNote">Waiting for the first step.</p>
         </section>
       </div>
