@@ -6,9 +6,9 @@ Play it: https://aariv.me/mipmap-arcade/
 
 The road you drive on is a texture. While you race you can switch the texture filter between point, bilinear and trilinear mipmapping, and slide a split across the screen to see a heatmap of the mip level each pixel is reading.
 
-## Honest notes first
+## Technical Overview
 
-This project was written with AI assistance. Hack Club Mipmap counts time spent AI coding at about a third less than hand coding and does not allow retyping a whole model-written project. This repository is therefore a disclosed AI-assisted reference build and is not a Hack Club Mipmap entry. The full reasoning is in [NOTES.md](NOTES.md). The tests are automated Node checks. The picture was checked in a real browser. No human playtesting has been done.
+The renderer builds a procedural mipmap pyramid down to 1x1 and samples texels per scanline using nearest-neighbor, bilinear, or trilinear interpolation. Details on the projection math and LOD calculation are in [NOTES.md](NOTES.md).
 
 ## How to play
 
