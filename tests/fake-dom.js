@@ -99,6 +99,20 @@ class FakeElement {
 
   focus() {}
   blur() {}
+
+  appendChild(child) {
+    this.children.push(child);
+    child.parentNode = this;
+    return child;
+  }
+
+  remove() {
+    if (this.parentNode) this.parentNode.children = this.parentNode.children.filter((c) => c !== this);
+  }
+
+  click() {
+    this.clicks = (this.clicks || 0) + 1;
+  }
 }
 
 function createEnvironment(options) {

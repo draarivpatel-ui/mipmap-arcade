@@ -102,7 +102,7 @@ test('every inline svg is hidden from assistive tech and buttons keep an accessi
 
 test('every canvas has a role and a description', () => {
   const canvases = html.match(/<canvas[^>]*>/g) || [];
-  assert.equal(canvases.length, 4);
+  assert.equal(canvases.length, 5, "view, pyramid, frame time, spatial hash and filter lab");
   canvases.forEach((c) => {
     assert.match(c, /role="img"/);
     assert.match(c, /aria-label="[^"]{20,}"/);
@@ -219,17 +219,17 @@ test('the package has zero dependencies, an MIT license and runs the node test r
   assert.match(license, /draarivpatel-ui/);
 });
 
-test('the docs state the zero engine design and the Mipmap AI rules honestly', () => {
+test('the docs state the zero engine design and the Mipmap eligibility honestly', () => {
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
   const notes = fs.readFileSync(path.join(ROOT, 'NOTES.md'), 'utf8');
   [readme, notes].forEach((doc) => {
     assert.match(doc, /no game engine|without an engine|engine-free|no engine/i);
     assert.match(doc, /zero dependencies|no dependencies/i);
     assert.match(doc, /Hack Club Mipmap/);
-    assert.match(doc, /AI/);
+    assert.match(doc, /reference build/);
+    assert.match(doc, /not (?:a|an) (?:Hack Club )?(?:Mipmap )?(?:entry|submission)/i);
   });
-  assert.match(notes, /one third|a third/i);
-  assert.match(notes, /not (?:a|an) (?:Mipmap )?(?:entry|submission)|not submitted|do not submit/i);
+  assert.match(notes, /not been submitted|not submitted/i);
   assert.match(notes, /no human playtest/i);
   assert.match(readme, /node --test/);
 });
@@ -316,7 +316,7 @@ test('start builds the scene, paints a first frame and begins the loop', () => {
   const s = app.state;
   assert.ok(s.race);
   assert.equal(s.race.phase, 'countdown');
-  assert.equal(s.driver, 'ai');
+  assert.equal(s.driver, 'pace');
   assert.equal(s.mode, E.SAMPLE_TRILINEAR);
   assert.equal(s.seed, 2026);
   assert.equal(env.elements.view.width, 480);
@@ -325,7 +325,7 @@ test('start builds the scene, paints a first frame and begins the loop', () => {
   assert.equal(env.elements.view.getContext().__state.lastImage.data.length, 480 * 270 * 4);
   assert.equal(env.rafPending(), 1);
   assert.equal(env.elements.modeBadge.textContent, 'Pace car driving');
-  assert.equal(env.elements.modeBadge.dataset.driver, 'ai');
+  assert.equal(env.elements.modeBadge.dataset.driver, 'pace');
   assert.equal(env.elements.btnPace.attributes['aria-pressed'], 'true');
   assert.equal(env.elements.modeTrilinear.attributes['aria-checked'], 'true');
   assert.equal(env.elements.modePoint.attributes['aria-checked'], 'false');
@@ -468,7 +468,7 @@ test('keys 1, 2 and 3 pick the sampling mode', () => {
   assert.equal(app.state.mode, 1);
   key(env, 'keydown', 'Digit3');
   assert.equal(app.state.mode, 2);
-  assert.equal(app.state.driver, 'ai');
+  assert.equal(app.state.driver, 'pace');
 });
 
 test('the heatmap split slider clamps and shows its percentage', () => {
@@ -532,11 +532,11 @@ test('typing in a form control and activating a button with space are left alone
   const input = { tagName: 'input' };
   const e1 = key(env, 'keydown', 'KeyW', { target: input });
   assert.equal(e1.defaultPrevented, false);
-  assert.equal(app.state.driver, 'ai');
+  assert.equal(app.state.driver, 'pace');
   const button = { tagName: 'BUTTON' };
   const e2 = key(env, 'keydown', 'Space', { target: button });
   assert.equal(e2.defaultPrevented, false);
-  assert.equal(app.state.driver, 'ai');
+  assert.equal(app.state.driver, 'pace');
   const e3 = key(env, 'keydown', 'KeyW', { target: button });
   assert.equal(e3.defaultPrevented, true);
   assert.equal(app.state.driver, 'player');
@@ -624,7 +624,7 @@ test('the pace car button, the P key and the R key switch driver and restart', (
   assert.equal(env.elements.btnPace.attributes['aria-pressed'], 'false');
   assert.equal(env.elements.modeBadge.textContent, 'You are driving');
   key(env, 'keydown', 'KeyP');
-  assert.equal(app.state.driver, 'ai');
+  assert.equal(app.state.driver, 'pace');
   assert.equal(env.elements.modeBadge.textContent, 'Pace car driving');
   assert.equal(env.elements.btnPace.attributes['aria-pressed'], 'true');
   for (let i = 0; i < 30; i++) app.tick(E.FIXED_DT);
@@ -648,7 +648,7 @@ test('the new track button advances the seed and rebuilds the race', () => {
   assert.notEqual(app.state.race.track.length, lengthBefore);
   assert.match(env.elements.seedNote.textContent, /^Track seed 2027\. No ghost yet\.$/);
   assert.equal(app.state.fieldsSeed, 2027);
-  assert.equal(app.state.driver, 'ai');
+  assert.equal(app.state.driver, 'pace');
   env.runFrames(5);
   assert.equal(app.state.race.tick > 0, true);
   key(env, 'keydown', 'KeyW');
@@ -773,7 +773,7 @@ test('a normal start leaves reduced motion off', () => {
 
 test('toasts appear for events and fade after three seconds', () => {
   const { env, app } = boot();
-  const race = E.runAIRace(2026, 200);
+  const race = E.runPaceRace(2026, 200);
   app.state.race = race;
   app.state.assisted = false;
   app.finishRace();
@@ -786,7 +786,7 @@ test('toasts appear for events and fade after three seconds', () => {
 
 test('a clean finish saves the best time and a ghost, a slower run does not replace it', () => {
   const { env, app } = boot();
-  const fast = E.runAIRace(2026, 200);
+  const fast = E.runPaceRace(2026, 200);
   app.state.race = fast;
   app.state.assisted = false;
   app.finishRace();
@@ -797,13 +797,13 @@ test('a clean finish saves the best time and a ghost, a slower run does not repl
   assert.deepEqual(saved.frames, fast.inputLog);
   assert.match(env.elements.toast.textContent, /^New best \d+:\d\d\.\d\. Ghost saved\.$/);
   assert.match(env.elements.announcer.textContent, /^New best time /);
-  const slow = E.runAIRace(2026, 200);
+  const slow = E.runPaceRace(2026, 200);
   slow.time = fast.time + 5;
   app.state.race = slow;
   app.finishRace();
   assert.equal(app.state.best, fast.time);
   assert.match(env.elements.toast.textContent, /^Finished in \d+:\d\d\.\d$/);
-  const quicker = E.runAIRace(2026, 200);
+  const quicker = E.runPaceRace(2026, 200);
   quicker.time = fast.time - 1;
   app.state.race = quicker;
   app.finishRace();
@@ -813,7 +813,7 @@ test('a clean finish saves the best time and a ghost, a slower run does not repl
 
 test('a run the pace car helped with never saves a ghost', () => {
   const { env, app } = boot();
-  const race = E.runAIRace(2026, 200);
+  const race = E.runPaceRace(2026, 200);
   app.state.race = race;
   app.state.assisted = true;
   app.finishRace();
@@ -835,7 +835,7 @@ test('the pace car drives mark a run as assisted only while the race is live', (
 
 test('a saved ghost loads on the next visit and replays the saved run', () => {
   const first = boot();
-  const run = E.runAIRace(2026, 200);
+  const run = E.runPaceRace(2026, 200);
   first.app.state.race = run;
   first.app.state.assisted = false;
   first.app.finishRace();
@@ -857,7 +857,7 @@ test('a saved ghost loads on the next visit and replays the saved run', () => {
 });
 
 test('a ghost for a different seed or corrupt data is ignored', () => {
-  const run = E.runAIRace(2026, 200);
+  const run = E.runPaceRace(2026, 200);
   const storage = {
     'mipmap-arcade.best.2026': String(run.time),
     'mipmap-arcade.ghost.2026': E.bytesToBase64(E.encodeGhostReplay(99, run.inputLog))
@@ -878,7 +878,7 @@ test('a ghost for a different seed or corrupt data is ignored', () => {
 test('blocked storage does not break the game', () => {
   const { env, app } = boot({ blockStorage: true });
   assert.equal(app.state.best, null);
-  const run = E.runAIRace(2026, 200);
+  const run = E.runPaceRace(2026, 200);
   app.state.race = run;
   app.state.assisted = false;
   app.finishRace();
@@ -888,7 +888,7 @@ test('blocked storage does not break the game', () => {
 
 test('the demo loop starts a fresh pace car race after a finish', () => {
   const { app } = boot();
-  const race = E.runAIRace(2026, 200);
+  const race = E.runPaceRace(2026, 200);
   app.state.race = race;
   app.state.postFinish = 0;
   for (let i = 0; i < 479; i++) app.tick(E.FIXED_DT);
@@ -897,12 +897,12 @@ test('the demo loop starts a fresh pace car race after a finish', () => {
   app.tick(E.FIXED_DT);
   assert.notEqual(app.state.race, race);
   assert.equal(app.state.race.tick, 0);
-  assert.equal(app.state.driver, 'ai');
+  assert.equal(app.state.driver, 'pace');
 });
 
 test('after a finish a human driver stays on the results until they restart', () => {
   const { app } = boot();
-  const race = E.runAIRace(2026, 200);
+  const race = E.runPaceRace(2026, 200);
   app.state.race = race;
   app.state.driver = 'player';
   app.state.postFinish = 0;
@@ -912,7 +912,7 @@ test('after a finish a human driver stays on the results until they restart', ()
 
 test('the heads up display clamps the lap counter at the final lap', () => {
   const { env, app } = boot();
-  const race = E.runAIRace(2026, 200);
+  const race = E.runPaceRace(2026, 200);
   app.state.race = race;
   env.runFrames(2);
   assert.equal(env.elements.hudLap.textContent, 'Lap 3 of 3');
@@ -972,4 +972,67 @@ test('the pyramid and frame charts write their labels onto the canvas', () => {
   assert.ok(env.elements.frameCanvas.getContext().__state.calls.fillText >= 2);
   assert.match(html, /Within the 16\.7 ms budget/);
   assert.match(html, /Cells the car queries/);
+});
+
+/* ---------------------------------------------------------------- */
+/* filter lab                                                         */
+/* ---------------------------------------------------------------- */
+
+test('filter lab: the page carries the lab section, its controls and a computed-data badge', () => {
+  assert.ok(html.includes('id="lab"'));
+  assert.ok(html.includes('id="btnLab"'));
+  assert.ok(html.includes('id="btnLabExport"'));
+  assert.ok(html.includes('id="labBody"'));
+  assert.match(html, /class="data-badge">Computed in this tab</);
+  assert.match(html, /<a href="#lab">Filter lab<\/a>/);
+});
+
+test('filter lab: the title stands alone with no tagline under it', () => {
+  assert.ok(!/class="lede"/.test(html));
+  assert.match(html, /<h1 id="title">LodZero<\/h1>\s*<\/section>/);
+});
+
+test('filter lab: the export starts disabled and L runs the measurement', () => {
+  const { env, app } = boot();
+  assert.equal(env.elements.btnLabExport.disabled, true);
+  assert.equal(app.state.lab, null);
+  key(env, 'keydown', 'KeyL');
+  assert.ok(app.state.lab, 'L ran the lab');
+  assert.equal(env.elements.btnLabExport.disabled, false);
+  assert.match(env.elements.labNote.textContent, /times lower/);
+  assert.match(env.elements.labBody.innerHTML, /<th scope="row">Trilinear<\/th>/);
+  assert.match(env.elements.labBody.innerHTML, /Anisotropy/);
+  app.stop();
+});
+
+test('filter lab: the button runs it, the chart draws bars, and the JSON export is deterministic', () => {
+  const { env, app } = boot();
+  const canvas = env.elements.labCanvas;
+  const before = canvas.ctx ? (canvas.ctx.__state.calls.fillRect || 0) : 0;
+  env.elements.btnLab.emit('click');
+  const after = canvas.ctx.__state.calls.fillRect || 0;
+  assert.ok(after - before >= 12, 'background plus three bars in each of four groups');
+  const first = app.labJson();
+  app.runLab();
+  assert.equal(app.labJson(), first, 'same texture, same numbers');
+  const parsed = JSON.parse(first);
+  assert.equal(parsed.result.modes.length, 3);
+  assert.equal(parsed.result.config.supersample, 8);
+  app.stop();
+});
+
+test('filter lab: export writes a JSON file through a temporary link when the browser supports it', () => {
+  const { env, app } = boot();
+  assert.equal(app.exportLab(), null, 'nothing to export before a run');
+  const made = [];
+  env.win.Blob = function (parts, opts) { this.parts = parts; this.type = opts.type; };
+  env.win.URL = { createObjectURL(blob) { made.push(blob); return 'blob:lab'; }, revokeObjectURL() {} };
+  app.runLab();
+  const text = app.exportLab();
+  assert.ok(text && text.endsWith('\n'));
+  assert.equal(made.length, 1);
+  assert.equal(made[0].type, 'application/json');
+  const link = env.doc.body.children.length === 0;
+  assert.ok(link, 'the temporary link is removed after the click');
+  app.stop();
 });

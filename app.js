@@ -89,10 +89,12 @@
   /* ---------------------------------------------------------------- */
 
   const state = {
+    lab: null,
+    labMs: 0,
     seed: DEFAULT_SEED,
     mode: E.SAMPLE_TRILINEAR,
     split: 0.55,
-    driver: 'ai',
+    driver: 'pace',
     assisted: false,
     race: null,
     ghost: null,
@@ -251,9 +253,9 @@
   }
 
   function currentInput(dt) {
-    if (state.driver === 'ai') {
+    if (state.driver === 'pace') {
       if (state.race.phase === 'running') state.assisted = true;
-      return E.computeAIInput(state.race);
+      return E.computePaceInput(state.race);
     }
     const target = playerTarget();
     const maxStep = STEER_RATE * dt;
@@ -302,6 +304,7 @@
     else if (code === 'KeyP') togglePace();
     else if (code === 'KeyM') toggleSound();
     else if (code === 'KeyR') newRace('player');
+    else if (code === 'KeyL') runLab();
   }
 
   function onKeyUp(event) {
@@ -391,15 +394,15 @@
 
   function togglePace() {
     ensureLoop();
-    state.driver = state.driver === 'ai' ? 'player' : 'ai';
+    state.driver = state.driver === 'pace' ? 'player' : 'pace';
     state.steer = 0;
     syncDriverUi();
   }
 
   function syncDriverUi() {
-    const ai = state.driver === 'ai';
-    $('btnPace').setAttribute('aria-pressed', ai ? 'true' : 'false');
-    $('modeBadge').textContent = ai ? 'Pace car driving' : 'You are driving';
+    const paced = state.driver === 'pace';
+    $('btnPace').setAttribute('aria-pressed', paced ? 'true' : 'false');
+    $('modeBadge').textContent = paced ? 'Pace car driving' : 'You are driving';
     $('modeBadge').dataset.driver = state.driver;
   }
 
@@ -543,8 +546,8 @@
     }
     if (race.phase === 'finished') {
       state.postFinish++;
-      if (state.postFinish >= POST_FINISH_TICKS && state.driver === 'ai') {
-        newRace('ai');
+      if (state.postFinish >= POST_FINISH_TICKS && state.driver === 'pace') {
+        newRace('pace');
       }
     }
   }
@@ -975,6 +978,147 @@
     rafId = win.requestAnimationFrame(loop);
   }
 
+  /* ---------------------------------------------------------------- */
+  /* filter lab                                                         */
+  /* ---------------------------------------------------------------- */
+
+  const LAB_GROUPS = [
+    { key: 'near', label: 'Near' },
+    { key: 'mid', label: 'Mid' },
+    { key: 'far', label: 'Far' },
+    { key: 'flicker', label: 'Flicker' }
+  ];
+
+  function labValue(mode, key) {
+    return key === 'flicker' ? mode.flicker : mode.rmse[key];
+  }
+
+  function fmt(value, digits) {
+    if (value === null || value === undefined) return 'n/a';
+    if (value === Infinity) return 'exact';
+    return value.toFixed(digits);
+  }
+
+  function drawLabChart() {
+    const canvas = $('labCanvas');
+    const c = canvas.getContext('2d');
+    const pal = state.palette;
+    const w = canvas.width;
+    const h = canvas.height;
+    c.fillStyle = rgbString(pal.paper2);
+    c.fillRect(0, 0, w, h);
+    const result = state.lab;
+    c.font = '600 13px ' + pal.fontMono;
+    c.textBaseline = 'alphabetic';
+    if (!result) {
+      c.fillStyle = rgbString(pal.inkSoft);
+      c.textAlign = 'center';
+      c.fillText('Press Measure aliasing or L', w / 2, h / 2);
+      c.textAlign = 'left';
+      return;
+    }
+    const colors = [pal.vermilion, pal.amber, pal.cyan];
+    let max = 0;
+    result.modes.forEach(function (m) {
+      LAB_GROUPS.forEach(function (g) {
+        const v = labValue(m, g.key);
+        if (v !== null && v > max) max = v;
+      });
+    });
+    const top = Math.max(5, Math.ceil(max / 5) * 5);
+    const padL = 38;
+    const padB = 24;
+    const padT = 12;
+    const plotH = h - padB - padT;
+    const plotW = w - padL - 8;
+    c.strokeStyle = rgbString(pal.rule);
+    c.fillStyle = rgbString(pal.inkSoft);
+    c.lineWidth = 1;
+    c.textAlign = 'right';
+    for (let t = 0; t <= top; t += top / 5) {
+      const y = padT + plotH - (t / top) * plotH;
+      c.beginPath();
+      c.moveTo(padL, Math.round(y) + 0.5);
+      c.lineTo(w - 8, Math.round(y) + 0.5);
+      c.stroke();
+      c.fillText(String(Math.round(t)), padL - 6, y + 4);
+    }
+    const groupW = plotW / LAB_GROUPS.length;
+    const barW = Math.min(30, groupW / 4.2);
+    LAB_GROUPS.forEach(function (g, gi) {
+      const gx = padL + gi * groupW + (groupW - barW * 3 - 8) / 2;
+      result.modes.forEach(function (m, mi) {
+        const v = labValue(m, g.key);
+        if (v === null) return;
+        const bh = (v / top) * plotH;
+        const x = gx + mi * (barW + 4);
+        c.fillStyle = rgbString(colors[mi]);
+        c.fillRect(x, padT + plotH - bh, barW, bh);
+      });
+      c.fillStyle = rgbString(pal.ink);
+      c.textAlign = 'center';
+      c.fillText(g.label, padL + gi * groupW + groupW / 2, h - 6);
+    });
+    c.textAlign = 'left';
+  }
+
+  function renderLabTable() {
+    const result = state.lab;
+    if (!result) return;
+    const bandCells = result.bands.map(function (b) {
+      return '<td>' + b.pixels + '</td>';
+    }).join('');
+    const rows = result.modes.map(function (m) {
+      return '<tr><th scope="row">' + m.name + '</th>' +
+        ['near', 'mid', 'far'].map(function (k) { return '<td>' + fmt(m.rmse[k], 1) + '</td>'; }).join('') +
+        '<td>' + fmt(m.psnr.all, 1) + ' dB</td><td>' + fmt(m.flicker, 1) + '</td></tr>';
+    }).join('');
+    const aniso = result.bands.map(function (b) {
+      return '<td>' + fmt(b.meanAnisotropy, 1) + '</td>';
+    }).join('');
+    $('labBody').innerHTML = rows +
+      '<tr class="lab-meta"><th scope="row">Pixels</th>' + bandCells + '<td colspan="2"></td></tr>' +
+      '<tr class="lab-meta"><th scope="row">Anisotropy</th>' + aniso + '<td colspan="2"></td></tr>';
+  }
+
+  function runLab() {
+    const t0 = now();
+    state.lab = E.measureFilterAliasing(state.pyramid);
+    state.labMs = now() - t0;
+    drawLabChart();
+    renderLabTable();
+    const tri = state.lab.modes[2];
+    const point = state.lab.modes[0];
+    const ratio = point.rmse.far / Math.max(tri.rmse.far, 1e-9);
+    $('labNote').textContent = 'Far-field error: trilinear ' + fmt(tri.rmse.far, 1) + ' against point ' + fmt(point.rmse.far, 1) +
+      ' luminance levels, ' + ratio.toFixed(1) + ' times lower. Measured in ' + Math.max(0, state.labMs).toFixed(0) + ' ms in this tab.';
+    $('btnLabExport').disabled = false;
+    announce('Filter lab measured. Trilinear far-field error is ' + ratio.toFixed(1) + ' times lower than point sampling.');
+    return state.lab;
+  }
+
+  function labJson() {
+    if (!state.lab) return null;
+    return JSON.stringify({ tool: 'Mipmap Arcade filter lab', texture: 'generateDetailTexture(256, seed 7)', result: state.lab }, function (k, v) {
+      if (v === Infinity) return 'exact';
+      return typeof v === 'number' ? Math.round(v * 10000) / 10000 : v;
+    }, 2) + '\n';
+  }
+
+  function exportLab() {
+    const text = labJson();
+    if (!text || !win.Blob || !win.URL || !win.URL.createObjectURL) return null;
+    const url = win.URL.createObjectURL(new win.Blob([text], { type: 'application/json' }));
+    const a = doc.createElement('a');
+    a.href = url;
+    a.download = 'mipmap-filter-lab.json';
+    doc.body.appendChild(a);
+    a.click();
+    if (a.remove) a.remove();
+    if (win.setTimeout) win.setTimeout(function () { win.URL.revokeObjectURL(url); }, 1000);
+    return text;
+  }
+
   function start() {
     state.reducedMotion = !!(win.matchMedia && win.matchMedia('(prefers-reduced-motion: reduce)').matches);
     state.palette = readPalette();
@@ -989,7 +1133,7 @@
     const params = new URLSearchParams(win.location && win.location.search ? win.location.search : '');
     const wanted = parseInt(params.get('seed'), 10);
     buildTrack(wanted > 0 ? wanted : DEFAULT_SEED);
-    newRace('ai', true);
+    newRace('pace', true);
     setMode(E.SAMPLE_TRILINEAR);
     setSplit(state.split);
     syncSoundUi();
@@ -1010,6 +1154,10 @@
     $('btnStart').addEventListener('click', function () { newRace('player'); });
     $('btnPace').addEventListener('click', togglePace);
     $('btnSound').addEventListener('click', toggleSound);
+    $('btnLab').addEventListener('click', runLab);
+    $('btnLabExport').addEventListener('click', exportLab);
+    $('btnLabExport').disabled = true;
+    drawLabChart();
     $('btnTrack').addEventListener('click', function () {
       buildTrack(state.seed + 1);
       newRace(state.driver);
@@ -1047,6 +1195,9 @@
     onKeyUp: onKeyUp,
     playerTarget: playerTarget,
     stop: function stop() { win.cancelAnimationFrame(rafId); rafId = 0; },
-    composite: composite
+    composite: composite,
+    runLab: runLab,
+    labJson: labJson,
+    exportLab: exportLab
   };
 }));

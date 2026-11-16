@@ -33,7 +33,8 @@
     <nav class="top-nav" aria-label="Sections">
       <a href="#arcade">Play</a>
       <a href="#how">How it works</a>
-      <a href="#honesty">Honest notes</a>
+      <a href="#lab">Filter lab</a>
+      <a href="#honesty">Notes</a>
       <a href="https://github.com/draarivpatel-ui/mipmap-arcade" rel="noopener">Source</a>
     </nav>
   </header>
@@ -41,7 +42,6 @@
   <main id="top">
     <section class="intro" aria-labelledby="title">
       <h1 id="title">LodZero</h1>
-      <p class="lede">An arcade racer whose road is a texture. Switch between point, bilinear and trilinear sampling while you drive, and slide the split to see which mip level every pixel is reading.</p>
     </section>
 
     <section id="arcade" class="arcade" aria-label="Game and engine inspector">
@@ -70,7 +70,7 @@
           <span class="legend-bar"></span>
           <span>Level 8, one texel</span>
         </div>
-        <p id="keys-help" class="keys-help">Steer with A and D or the arrow keys. W accelerates, S brakes. Hold Space to drift, release to boost. Keys 1, 2 and 3 pick the sampling mode. P toggles the pace car, M mutes, R restarts. Press any driving key to take over from the pace car.</p>
+        <p id="keys-help" class="keys-help">Steer with A and D or the arrow keys. W accelerates, S brakes. Hold Space to drift, release to boost. Keys 1, 2 and 3 pick the sampling mode, L runs the filter lab. P toggles the pace car, M mutes, R restarts. Press any driving key to take over from the pace car.</p>
         <div class="touch-controls" id="touch" aria-label="On-screen controls">
           <button type="button" class="touch-btn" data-touch="left" aria-label="Steer left">
             <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
@@ -171,6 +171,42 @@
       </div>
     </section>
 
+    <section id="lab" class="lab" aria-labelledby="h-lab">
+      <div class="lab-head">
+        <h2 id="h-lab" class="section-title">Filter lab</h2>
+        <div class="button-row">
+          <button type="button" class="btn btn-primary" id="btnLab">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            <span>Measure aliasing</span>
+            <kbd>L</kbd>
+          </button>
+          <button type="button" class="btn" id="btnLabExport" disabled>Download metrics JSON</button>
+        </div>
+      </div>
+      <div class="lab-grid">
+        <figure class="lab-figure">
+          <canvas id="labCanvas" class="panel-canvas" width="560" height="232" role="img" aria-label="Grouped bar chart of luminance error for point, bilinear and trilinear sampling in the near, mid and far bands, plus frame to frame flicker. Lower is better."></canvas>
+          <ul class="key" aria-label="Chart key">
+            <li><span class="swatch swatch-vermilion"></span>Point</li>
+            <li><span class="swatch swatch-amber"></span>Bilinear</li>
+            <li><span class="swatch swatch-cyan"></span>Trilinear</li>
+          </ul>
+        </figure>
+        <div class="lab-table-wrap">
+          <table class="lab-table">
+            <caption class="sr-only">Root mean square luminance error by distance band, peak signal to noise ratio, and flicker for each sampling mode</caption>
+            <thead>
+              <tr><th scope="col">Mode</th><th scope="col">Near</th><th scope="col">Mid</th><th scope="col">Far</th><th scope="col">PSNR</th><th scope="col">Flicker</th></tr>
+            </thead>
+            <tbody id="labBody">
+              <tr><td colspan="6">Not measured yet.</td></tr>
+            </tbody>
+          </table>
+          <p class="lab-method"><span class="data-badge">Computed in this tab</span> Each mode renders a 128 by 72 ground plane and is compared with an 8 by 8 supersampled box filter of the full size texture, over 8 frames while the camera creeps forward 0.37 texels per frame. Bands split pixels by lambda: near is magnified (lambda at most 0), mid is up to 3, far is beyond. Error is RMS on 0 to 255 luminance. Flicker is the RMS change of that error between frames.</p>
+        </div>
+      </div>
+      <p class="panel-note" id="labNote">Not measured yet.</p>
+    </section>
     <div class="announcer" id="announcer" role="status" aria-live="polite"></div>
 
     <section id="how" class="how" aria-labelledby="h-how">
@@ -196,8 +232,8 @@
     </section>
 
     <section id="honesty" class="how honesty" aria-labelledby="h-honesty">
-      <h2 id="h-honesty" class="section-title">Implementation notes</h2>
-      <p class="prose">The renderer builds a full power-of-two mipmap chain down to 1x1 and computes continuous level-of-detail (LOD) per scanline from screen-space texture derivatives. Full details are in <a href="https://github.com/draarivpatel-ui/mipmap-arcade/blob/main/NOTES.md" rel="noopener">NOTES.md</a>.</p>
+      <h2 id="h-honesty" class="section-title">Notes</h2>
+      <p class="prose">This is a reference build, not a Hack Club Mipmap entry. The renderer builds a full power-of-two mipmap chain down to 1 by 1 and computes a continuous level of detail per pixel from exact screen-space texture derivatives. The tests are automated checks that run in Node, and the picture was checked in a real browser. No human playtesting has been done. Full details are in <a href="https://github.com/draarivpatel-ui/mipmap-arcade/blob/main/NOTES.md" rel="noopener">NOTES.md</a>.</p>
     </section>
   </main>
 

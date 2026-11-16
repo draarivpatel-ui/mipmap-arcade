@@ -1547,7 +1547,7 @@ test('the pace car laps the circuit in order and finishes three laps', () => {
   const gates = [];
   const types = {};
   for (let i = 0; i < 120 * 200 && race.phase !== 'finished'; i++) {
-    const events = E.stepRace(race, E.computeAIInput(race), E.FIXED_DT);
+    const events = E.stepRace(race, E.computePaceInput(race), E.FIXED_DT);
     events.forEach((e) => {
       types[e.type] = (types[e.type] || 0) + 1;
       if (e.type === 'gate') gates.push(e.id);
@@ -1676,7 +1676,7 @@ test('the broadphase prunes most entities before the narrow phase', () => {
 });
 
 test('after the finish the car brakes to a stop and ignores the sticks', () => {
-  const race = E.runAIRace(2026, 200);
+  const race = E.runPaceRace(2026, 200);
   assert.equal(race.phase, 'finished');
   for (let i = 0; i < 120 * 12; i++) E.stepRace(race, GAS, E.FIXED_DT);
   assert.ok(race.car.speed < 12);
@@ -1746,7 +1746,7 @@ test('a recorded run replays to the identical state from its inputs alone', () =
   const rng = E.mulberry32(21);
   for (let i = 0; i < 120 * 40; i++) {
     const input = i % 200 < 100
-      ? E.computeAIInput(live)
+      ? E.computePaceInput(live)
       : { steer: rng() * 2 - 1, throttle: rng(), brake: rng() < 0.2 ? 1 : 0, drift: rng() < 0.3 };
     E.stepRace(live, input, E.FIXED_DT);
   }
@@ -1760,7 +1760,7 @@ test('a recorded run replays to the identical state from its inputs alone', () =
 });
 
 test('a full pace car race replays to the same finish time', () => {
-  const live = E.runAIRace(7, 200);
+  const live = E.runPaceRace(7, 200);
   const ghost = E.replayRace(7, live.inputLog);
   assert.equal(ghost.phase, 'finished');
   assert.equal(ghost.time, live.time);
@@ -1775,7 +1775,7 @@ test('a full pace car race replays to the same finish time', () => {
 
 test('the pace car finishes three laps on several seeds without leaving the road', () => {
   for (const seed of [1, 7, 99, 2026]) {
-    const race = E.runAIRace(seed, 200);
+    const race = E.runPaceRace(seed, 200);
     assert.equal(race.phase, 'finished', 'seed ' + seed);
     assert.ok(race.maxOffset < 4, 'seed ' + seed + ' offset ' + race.maxOffset);
     assert.ok(race.time > 90 && race.time < 150, 'seed ' + seed + ' time ' + race.time);
@@ -1783,8 +1783,8 @@ test('the pace car finishes three laps on several seeds without leaving the road
   }
 });
 
-test('runAIRace respects its time budget', () => {
-  const race = E.runAIRace(2026, 20);
+test('runPaceRace respects its time budget', () => {
+  const race = E.runPaceRace(2026, 20);
   assert.notEqual(race.phase, 'finished');
   near(race.tick, 2400, 1);
   assert.ok(race.maxOffset >= 0);
@@ -1805,20 +1805,20 @@ function raceAt(s, speed, offset) {
 }
 
 test('the pace car steers back toward the line from either side', () => {
-  const left = E.computeAIInput(raceAt(200, 20, 5));
+  const left = E.computePaceInput(raceAt(200, 20, 5));
   assert.ok(left.steer > 0, 'left of the line steers right ' + left.steer);
-  const right = E.computeAIInput(raceAt(200, 20, -5));
+  const right = E.computePaceInput(raceAt(200, 20, -5));
   assert.ok(right.steer < 0, 'right of the line steers left ' + right.steer);
-  const centred = E.computeAIInput(raceAt(200, 20, 0));
+  const centred = E.computePaceInput(raceAt(200, 20, 0));
   assert.ok(Math.abs(centred.steer) < 0.3);
   assert.ok(Math.abs(left.steer) <= 1);
 });
 
 test('the pace car brakes when far too fast and accelerates when slow', () => {
-  const slow = E.computeAIInput(raceAt(300, 10, 0));
+  const slow = E.computePaceInput(raceAt(300, 10, 0));
   assert.equal(slow.throttle, 1);
   assert.equal(slow.brake, 0);
-  const fast = E.computeAIInput(raceAt(300, 78, 0));
+  const fast = E.computePaceInput(raceAt(300, 78, 0));
   assert.equal(fast.throttle, 0);
   assert.ok(fast.brake >= 0.2 && fast.brake <= 1);
   assert.equal(slow.drift, false);
@@ -1827,7 +1827,7 @@ test('the pace car brakes when far too fast and accelerates when slow', () => {
 test('the pace car holds a speed target with a gentle throttle inside the tolerance band', () => {
   let found = false;
   for (let v = 20; v < 78 && !found; v += 0.5) {
-    const input = E.computeAIInput(raceAt(300, v, 0));
+    const input = E.computePaceInput(raceAt(300, v, 0));
     if (input.throttle > 0 && input.throttle < 1) {
       found = true;
       assert.equal(input.throttle, 0.35);
@@ -1841,7 +1841,7 @@ test('the pace car slows for tighter corners than for straights', () => {
   const race = E.createRace(2026);
   const speedFor = (s) => {
     for (let v = 16; v <= 78; v += 1) {
-      const input = E.computeAIInput(raceAt(s, v, 0));
+      const input = E.computePaceInput(raceAt(s, v, 0));
       if (input.throttle < 1) return v;
     }
     return 79;

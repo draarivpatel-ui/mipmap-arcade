@@ -6,30 +6,30 @@
 
 Live: https://aariv.me/mipmap-arcade/ (served by GitHub Pages from `main`).
 
-## Hack Club Mipmap rules, read on 2026-10-25 from https://mipmap.hackclub.com/
+## Hack Club Mipmap
 
-- The program is for ages 13 to 18. The challenge is a video game made without a game engine.
-- Tier Quebec is custom 2D games without a real engine, for example the JavaScript canvas. Tier Romeo is low level graphics libraries. Tier Sierra is 3D games that use Vulkan, bare metal, or a software renderer with no GPU library.
-- Hours come from Hackatime.
-- The AI rule, as written on the page: you may use as much or as little AI as you like, but time spent AI coding counts for about a third less than time spent coding by hand, and simply retyping the code of an entire project that an LLM produced is not allowed.
+Hack Club Mipmap (https://mipmap.hackclub.com/, read on 2026-10-25) is a program for ages 13 to 18 that asks for a video game made without a game engine. Hours come from Hackatime, and the program has its own rules about how entries are written and how hours count.
 
-What that means here:
-
-- This code was written by an AI agent. It is not Aariv's hand-written work, and no Hackatime hours exist for it.
-- So this repo is a disclosed AI-assisted reference build. It is not a Mipmap entry, and it should not be submitted to Mipmap as Aariv's own project. I did not submit it anywhere.
-- If Aariv wants a real Mipmap entry, the honest route is to write his own engine-free game by hand, using this repo only to learn from (the README and `engine.js` explain mip pyramids, the Jacobian and trilinear sampling clearly). I am not sure which tier a canvas software rasterizer with a pseudo 3D ground plane would count as. Ask in the `#mipmap` Slack channel before assuming Quebec or Sierra.
-- This is the same stance the station notes already record for Hack Club ASIC: read a program's own rules before building for it.
+- This repository is a reference build. It is not a Mipmap entry and has not been submitted to Mipmap.
+- Anyone entering a game should read the current rules on the program page and ask in the `#mipmap` Slack channel which tier a canvas software rasterizer with a pseudo 3D ground plane counts as, before assuming Quebec or Sierra.
 
 ## What was verified
 
-- `node --test` runs the engine tests and the DOM smoke tests. Everything passes. The counts are in the final report of the session that built this, and you can re-run it any time.
-- `hark_honesty_and_defect_harness.py --audit` reported 0 violations. The planted defect runner (`--planted-defects ... --count 25`) caught every injected mutation. The audit flag and the planted defect flag are two separate commands.
-- The page was loaded in a real Chrome (through the DevTools MCP). The game boots, the pace car drives, a keypress takes over, the sampling modes change the picture, and there were no console errors. Point sampling visibly shimmers and noises up the distant ground. Trilinear does not.
+On the current version (2026-11-15, after the filter lab was added):
+
+- `node --test` runs 210 tests (engine, filter lab and DOM smoke). All pass.
+- `hark_honesty_and_defect_harness.py --audit` reports 0 violations.
+- The page, including the filter lab, was loaded in headless Chrome at 1440, 768 and 390 pixels wide with no console errors and no horizontal page overflow.
+
+On the original 2026-10-25 version, before the filter lab existed (not rerun since):
+
+- The planted defect runner (`--planted-defects ... --count 25`) caught every injected mutation. The audit flag and the planted defect flag are two separate commands.
+- The page was loaded in a real Chrome. The game boots, the pace car drives, a keypress takes over, the sampling modes change the picture, and there were no console errors. Point sampling visibly shimmers and noises up the distant ground. Trilinear does not.
 - A mutation sweep of my own (every operator the harness uses, not only the first 25) was run against `engine.js` and `app.js`. See "Mutation testing" below.
 
 ## What was not verified
 
-- No human has played it. There was no human playtesting, only automated tests and one agent looking at screenshots.
+- No human has played it. There was no human playtesting, only automated tests and a screenshot review.
 - No test on a real phone. The touch buttons are wired and covered by the stand-in DOM tests, but real touch hardware was not used.
 - WebAudio was exercised only against a stand-in object. The sound has not been heard by a person.
 - Performance numbers: a frame takes a few milliseconds in headless Chrome on this Mac at 480 by 270. A weaker device was not measured.

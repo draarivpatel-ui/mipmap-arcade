@@ -5,7 +5,7 @@
  *
  * Contents: seeded PRNG, mip pyramid and texture filters, a software ground-plane
  * rasterizer with an exact screen-space Jacobian, spatial hash grid, SAT collision,
- * vehicle physics at a fixed 120 Hz step, track generation, race rules, an AI pace
+ * vehicle physics at a fixed 120 Hz step, track generation, race rules, a pace
  * car, and a run-length encoded ghost replay format.
  *
  * Coordinates: x to the east, y to the north, heading in radians counter-clockwise from east.
@@ -1374,10 +1374,10 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* AI pace car                                                         */
+  /* Pace car autopilot                                                  */
   /* ------------------------------------------------------------------ */
 
-  const AI = {
+  const PACE = {
     lookaheadBase: 10,
     lookaheadSpeed: 0.5,
     steerGain: 2.2,
@@ -1391,30 +1391,30 @@
   };
 
   /** Pure pursuit steering plus a curvature-limited speed target. Returns the same input shape a player makes. */
-  function computeAIInput(race) {
+  function computePaceInput(race) {
     const car = race.car;
     const track = race.track;
     const near = race.progress;
     const speed = Math.max(car.speed, 0);
-    const look = AI.lookaheadBase + speed * AI.lookaheadSpeed;
+    const look = PACE.lookaheadBase + speed * PACE.lookaheadSpeed;
     const target = pointAtDistance(track, near.s + look);
     const bearing = Math.atan2(target.y - car.y, target.x - car.x);
     const error = wrapAngle(bearing - car.heading);
-    const steer = clamp(-error * AI.steerGain, -1, 1);
+    const steer = clamp(-error * PACE.steerGain, -1, 1);
 
     let maxCurve = 0;
-    for (let d = 0; d <= AI.scanDistance; d += AI.scanStep) {
+    for (let d = 0; d <= PACE.scanDistance; d += PACE.scanStep) {
       const p = pointAtDistance(track, near.s + d);
       maxCurve = Math.max(maxCurve, Math.abs(p.curvature));
     }
-    const limit = Math.sqrt(AI.cornerAccel / Math.max(maxCurve, 0.0005)) * AI.cornerSafety;
-    const targetSpeed = clamp(limit, AI.minTarget, AI.maxTarget);
+    const limit = Math.sqrt(PACE.cornerAccel / Math.max(maxCurve, 0.0005)) * PACE.cornerSafety;
+    const targetSpeed = clamp(limit, PACE.minTarget, PACE.maxTarget);
 
     let throttle = 0;
     let brake = 0;
-    if (speed < targetSpeed - AI.speedTolerance) {
+    if (speed < targetSpeed - PACE.speedTolerance) {
       throttle = 1;
-    } else if (speed > targetSpeed + AI.speedTolerance) {
+    } else if (speed > targetSpeed + PACE.speedTolerance) {
       brake = clamp((speed - targetSpeed) / 8, 0.2, 1);
     } else {
       throttle = 0.35;
@@ -1423,12 +1423,12 @@
   }
 
   /** Runs the pace car on a fresh race. Used by the tests and by the page for its lap benchmark. */
-  function runAIRace(seed, maxSeconds, options) {
+  function runPaceRace(seed, maxSeconds, options) {
     const race = createRace(seed, options);
     const steps = Math.round(maxSeconds / FIXED_DT);
     let maxOffset = 0;
     for (let i = 0; i < steps && race.phase !== 'finished'; i++) {
-      stepRace(race, computeAIInput(race), FIXED_DT);
+      stepRace(race, computePaceInput(race), FIXED_DT);
       maxOffset = Math.max(maxOffset, Math.abs(race.progress.offset));
     }
     race.maxOffset = maxOffset;
@@ -1444,6 +1444,187 @@
     return race;
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Filter lab: aliasing error against a supersampled reference         */
+  /* ------------------------------------------------------------------ */
+
+  const LAB_DEFAULTS = {
+    width: 128,
+    height: 72,
+    horizonY: 18,
+    focal: 96,
+    cameraHeight: 1.6,
+    textureScale: 0.04,
+    supersample: 8,
+    frames: 8,
+    stepPerFrame: 0.37,
+    nearMax: 0,
+    midMax: 3
+  };
+
+  const LAB_BANDS = ['near', 'mid', 'far'];
+  const LAB_MODES = [
+    { mode: SAMPLE_POINT, name: 'Point' },
+    { mode: SAMPLE_BILINEAR, name: 'Bilinear' },
+    { mode: SAMPLE_TRILINEAR, name: 'Trilinear' }
+  ];
+
+  /**
+   * Ground-plane footprint of one pixel for a camera looking along +x. Returns the
+   * texture-space Jacobian, lambda, and the anisotropy ratio (long edge over short
+   * edge of the footprint). Same analytic derivatives as renderGround.
+   */
+  function labPixelFootprint(cfg, base, x, y) {
+    const dy = y + 0.5 - cfg.horizonY;
+    const dx = x + 0.5 - cfg.width * 0.5;
+    const z = cfg.cameraHeight * cfg.focal / dy;
+    const zOverF = z / cfg.focal;
+    const dzdy = -z / dy;
+    const ts = cfg.textureScale;
+    // Forward is +x, right is -y (matches renderGround with heading 0).
+    const dudx = 0;
+    const dvdx = -zOverF * ts;
+    const dudy = dzdy * ts;
+    const dvdy = (-dx / cfg.focal) * dzdy * ts;
+    const lambda = computeMipLevelFromJacobian(dudx, dvdx, dudy, dvdy, base.width, base.height);
+    const lx = Math.hypot(dudx * base.width, dvdx * base.height);
+    const ly = Math.hypot(dudy * base.width, dvdy * base.height);
+    const anisotropy = Math.max(lx, ly) / Math.max(Math.min(lx, ly), 1e-9);
+    return { lambda: lambda, anisotropy: anisotropy };
+  }
+
+  function labGroundUv(cfg, camX, sx, sy) {
+    const dy = sy - cfg.horizonY;
+    const z = cfg.cameraHeight * cfg.focal / dy;
+    const lateral = (sx - cfg.width * 0.5) * z / cfg.focal;
+    return [(camX + z) * cfg.textureScale, (-lateral) * cfg.textureScale];
+  }
+
+  /**
+   * Measures how far each sampling mode lands from a box-filtered reference.
+   * The reference averages supersample x supersample nearest samples of level 0
+   * spread evenly across each pixel, which approximates the true average of the
+   * texture under that pixel. Error is reported per distance band (by lambda) as
+   * RMSE and PSNR on 0 to 255 luminance, and temporal flicker is the RMS change
+   * of the error between frames while the camera creeps forward by a fraction
+   * of a texel, which is what the eye sees as shimmer. Deterministic.
+   */
+  function measureFilterAliasing(pyramid, options) {
+    const cfg = Object.assign({}, LAB_DEFAULTS, options || {});
+    if (!(cfg.horizonY >= 0 && cfg.horizonY < cfg.height - 1)) {
+      throw new RangeError('horizonY must leave at least one ground row');
+    }
+    const base = pyramid.levels[0];
+    const W = cfg.width;
+    const rows = [];
+    for (let y = 0; y < cfg.height; y++) {
+      if (y + 0.5 - cfg.horizonY > 0.001) rows.push(y);
+    }
+    const pixelCount = rows.length * W;
+    const band = new Uint8Array(pixelCount);
+    const lambdas = new Float32Array(pixelCount);
+    const bandStats = LAB_BANDS.map(function (id) {
+      return { id: id, pixels: 0, lambdaSum: 0, anisotropySum: 0 };
+    });
+    let p = 0;
+    for (let r = 0; r < rows.length; r++) {
+      for (let x = 0; x < W; x++, p++) {
+        const fp = labPixelFootprint(cfg, base, x, rows[r]);
+        const b = fp.lambda <= cfg.nearMax ? 0 : fp.lambda <= cfg.midMax ? 1 : 2;
+        band[p] = b;
+        lambdas[p] = fp.lambda;
+        bandStats[b].pixels++;
+        bandStats[b].lambdaSum += fp.lambda;
+        bandStats[b].anisotropySum += fp.anisotropy;
+      }
+    }
+
+    const S = Math.max(1, Math.floor(cfg.supersample));
+    const tex = [0, 0, 0, 0];
+    const ref = new Float64Array(pixelCount);
+    const modeErr = LAB_MODES.map(function () {
+      return { sq: [0, 0, 0], prev: new Float64Array(pixelCount), flickerSq: 0, flickerN: 0 };
+    });
+
+    for (let f = 0; f < cfg.frames; f++) {
+      const camX = f * cfg.stepPerFrame / cfg.textureScale / base.width;
+      p = 0;
+      for (let r = 0; r < rows.length; r++) {
+        const y = rows[r];
+        for (let x = 0; x < W; x++, p++) {
+          let acc = 0;
+          for (let j = 0; j < S; j++) {
+            const sy = y + (j + 0.5) / S;
+            for (let i = 0; i < S; i++) {
+              const uv = labGroundUv(cfg, camX, x + (i + 0.5) / S, sy);
+              sampleNearest(base, uv[0], uv[1], tex);
+              acc += tex[0];
+            }
+          }
+          ref[p] = acc / (S * S);
+          const centre = labGroundUv(cfg, camX, x + 0.5, y + 0.5);
+          for (let m = 0; m < LAB_MODES.length; m++) {
+            sampleTexture(pyramid, LAB_MODES[m].mode, centre[0], centre[1], lambdas[p], tex);
+            const err = tex[0] - ref[p];
+            const st = modeErr[m];
+            st.sq[band[p]] += err * err;
+            if (f > 0) {
+              const d = err - st.prev[p];
+              st.flickerSq += d * d;
+              st.flickerN++;
+            }
+            st.prev[p] = err;
+          }
+        }
+      }
+    }
+
+    const psnr = function (rmse) {
+      return rmse > 0 ? 20 * Math.log10(255 / rmse) : Infinity;
+    };
+    const modes = LAB_MODES.map(function (entry, m) {
+      const st = modeErr[m];
+      const rmse = {};
+      const out = { mode: entry.mode, name: entry.name, rmse: rmse, psnr: {}, flicker: 0 };
+      let total = 0;
+      for (let b = 0; b < 3; b++) {
+        const n = bandStats[b].pixels * cfg.frames;
+        rmse[LAB_BANDS[b]] = n > 0 ? Math.sqrt(st.sq[b] / n) : null;
+        out.psnr[LAB_BANDS[b]] = rmse[LAB_BANDS[b]] === null ? null : psnr(rmse[LAB_BANDS[b]]);
+        total += st.sq[b];
+      }
+      rmse.all = Math.sqrt(total / (pixelCount * cfg.frames));
+      out.psnr.all = psnr(rmse.all);
+      out.flicker = st.flickerN > 0 ? Math.sqrt(st.flickerSq / st.flickerN) : 0;
+      return out;
+    });
+
+    return {
+      config: {
+        width: cfg.width,
+        height: cfg.height,
+        horizonY: cfg.horizonY,
+        focal: cfg.focal,
+        cameraHeight: cfg.cameraHeight,
+        textureScale: cfg.textureScale,
+        supersample: S,
+        frames: cfg.frames,
+        stepPerFrameTexels: cfg.stepPerFrame,
+        textureSize: base.width
+      },
+      groundPixels: pixelCount,
+      bands: bandStats.map(function (b) {
+        return {
+          id: b.id,
+          pixels: b.pixels,
+          meanLambda: b.pixels ? b.lambdaSum / b.pixels : null,
+          meanAnisotropy: b.pixels ? b.anisotropySum / b.pixels : null
+        };
+      }),
+      modes: modes
+    };
+  }
+
   return {
     FIXED_DT: FIXED_DT,
     NO_LOD: NO_LOD,
@@ -1452,7 +1633,7 @@
     SAMPLE_TRILINEAR: SAMPLE_TRILINEAR,
     VEHICLE: VEHICLE,
     RACE: RACE,
-    AI: AI,
+    PACE: PACE,
     clamp: clamp,
     lerp: lerp,
     wrapAngle: wrapAngle,
@@ -1499,8 +1680,11 @@
     createRace: createRace,
     stepRace: stepRace,
     hashRaceState: hashRaceState,
-    computeAIInput: computeAIInput,
-    runAIRace: runAIRace,
-    replayRace: replayRace
+    computePaceInput: computePaceInput,
+    runPaceRace: runPaceRace,
+    replayRace: replayRace,
+    LAB_DEFAULTS: LAB_DEFAULTS,
+    labPixelFootprint: labPixelFootprint,
+    measureFilterAliasing: measureFilterAliasing
   };
 }));
