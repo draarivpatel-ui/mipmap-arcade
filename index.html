@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Mipmap Arcade: LodZero, a racer built without an engine</title>
   <meta name="description" content="LodZero is an arcade racer and software rasterizer workbench in plain JavaScript. Switch between point, bilinear and trilinear texture sampling while you drive and watch the level of detail heatmap.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -70,7 +71,8 @@
           <span class="legend-bar"></span>
           <span>Level 8, one texel</span>
         </div>
-        <p id="keys-help" class="keys-help">Steer with A and D or the arrow keys. W accelerates, S brakes. Hold Space to drift, release to boost. Keys 1, 2 and 3 pick the sampling mode, L runs the filter lab. P toggles the pace car, M mutes, R restarts. Press any driving key to take over from the pace car.</p>
+        <p id="keys-help" class="keys-help">Steer with A and D or the arrow keys. W accelerates, S brakes. Hold Space to drift, release to boost. Keys 1, 2 and 3 pick the sampling mode, L runs the filter lab. P toggles the pace car, M mutes, R restarts. Press any driving key to take over from the pace car. The arrow keys always drive; every letter and number key can be turned off below.</p>
+        <label class="keys-toggle"><input type="checkbox" id="chkShortcuts" checked> Letter and number shortcuts <span class="keys-toggle-note">(clears W, A, S, D, Space, 1, 2, 3, P, M, R and L)</span></label>
         <div class="touch-controls" id="touch" aria-label="On-screen controls">
           <button type="button" class="touch-btn" data-touch="left" aria-label="Steer left">
             <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
@@ -95,9 +97,9 @@
         <section class="panel" aria-labelledby="h-sampling">
           <h2 id="h-sampling">Sampling</h2>
           <div class="segmented" role="radiogroup" aria-label="Texture sampling mode">
-            <button type="button" role="radio" class="seg" id="modePoint" data-mode="0" aria-checked="false">Point</button>
-            <button type="button" role="radio" class="seg" id="modeBilinear" data-mode="1" aria-checked="false">Bilinear</button>
-            <button type="button" role="radio" class="seg" id="modeTrilinear" data-mode="2" aria-checked="true">Trilinear</button>
+            <button type="button" role="radio" class="seg" id="modePoint" data-mode="0" aria-checked="false" tabindex="-1">Point</button>
+            <button type="button" role="radio" class="seg" id="modeBilinear" data-mode="1" aria-checked="false" tabindex="-1">Bilinear</button>
+            <button type="button" role="radio" class="seg" id="modeTrilinear" data-mode="2" aria-checked="true" tabindex="0">Trilinear</button>
           </div>
           <p class="panel-note" id="modeNote">Trilinear blends two pyramid levels by the fraction of lambda.</p>
         </section>

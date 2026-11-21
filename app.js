@@ -64,7 +64,11 @@
   function parseColor(text) {
     const t = String(text).trim().replace('#', '');
     const full = t.length === 3 ? t[0] + t[0] + t[1] + t[1] + t[2] + t[2] : t;
-    return [parseInt(full.slice(0, 2), 16), parseInt(full.slice(2, 4), 16), parseInt(full.slice(4, 6), 16)];
+    const channel = function (pair) {
+      const n = parseInt(pair, 16);
+      return Number.isFinite(n) ? n : 0;
+    };
+    return [channel(full.slice(0, 2)), channel(full.slice(2, 4)), channel(full.slice(4, 6))];
   }
 
   function rgbString(c, alpha) {
@@ -115,6 +119,7 @@
     probe: { lambda: 0, level: 0 },
     keys: {},
     touch: {},
+    shortcuts: true,
     frames: 0
   };
 
@@ -206,9 +211,11 @@
   }
 
   function buildTrack(seed) {
-    state.seed = seed;
+    /* mulberry32, createRace and the ghost format all treat the seed as uint32;
+       a ?seed= over 2^32 must normalize here or saved ghosts would never match. */
+    state.seed = seed >>> 0;
     loadBest();
-    $('seedNote').textContent = 'Track seed ' + seed + (state.best ? '. Ghost saved at ' + formatTime(state.best) + '.' : '. No ghost yet.');
+    $('seedNote').textContent = 'Track seed ' + state.seed + (state.best ? '. Ghost saved at ' + formatTime(state.best) + '.' : '. No ghost yet.');
   }
 
   function newRace(driver, skipLoop) {
@@ -287,10 +294,23 @@
     return tag === 'BUTTON' || tag === 'A';
   }
 
+  function isArrowKey(code) {
+    return code === 'ArrowLeft' || code === 'ArrowRight' || code === 'ArrowUp' || code === 'ArrowDown';
+  }
+
   function onKeyDown(event) {
     const code = event.code;
     if (isTypingTarget(event.target)) return;
     ensureAudio();
+    /* Arrow keys are not character keys, so WCAG 2.1.4 lets them always drive.
+       Every letter, digit and Space shortcut sits behind the shortcuts switch. */
+    if (isArrowKey(code)) {
+      event.preventDefault();
+      state.keys[code] = true;
+      takeOver();
+      return;
+    }
+    if (!state.shortcuts) return;
     if (isDrivingKey(code)) {
       if (code === 'Space' && isActivationTarget(event.target)) return;
       event.preventDefault();
@@ -316,6 +336,21 @@
     state.touch = {};
     const buttons = $('touch').querySelectorAll('[data-touch]');
     for (let i = 0; i < buttons.length; i++) buttons[i].dataset.active = 'false';
+  }
+
+  /* WCAG 2.1.4: the page offers a way to turn every character-key shortcut
+     off. The arrow keys keep driving because they are not character keys. */
+  function bindShortcutsToggle() {
+    const box = $('chkShortcuts');
+    if (!box) return;
+    state.shortcuts = box.checked !== false;
+    box.addEventListener('change', function () {
+      state.shortcuts = box.checked !== false;
+      releaseAll();
+      announce(state.shortcuts
+        ? 'Letter and number shortcuts on.'
+        : 'Letter and number shortcuts off. The arrow keys still drive.');
+    });
   }
 
   function bindTouch() {
@@ -350,6 +385,8 @@
     const ids = ['modePoint', 'modeBilinear', 'modeTrilinear'];
     for (let i = 0; i < ids.length; i++) {
       $(ids[i]).setAttribute('aria-checked', i === mode ? 'true' : 'false');
+      /* a radiogroup keeps one tab stop: the checked radio */
+      $(ids[i]).tabIndex = i === mode ? 0 : -1;
     }
     $('modeNote').textContent = MODE_NOTES[mode];
     announce(MODE_NAMES[mode] + ' sampling.');
@@ -1128,6 +1165,10 @@
     canvas.width = VIEW_W;
     canvas.height = VIEW_H;
     ctx = canvas.getContext('2d');
+    if (!ctx) {
+      announce('Canvas is not available, so the rasterizer cannot run.');
+      return;
+    }
     imageData = ctx.createImageData(VIEW_W, VIEW_H);
 
     const params = new URLSearchParams(win.location && win.location.search ? win.location.search : '');
@@ -1145,10 +1186,26 @@
     doc.addEventListener('visibilitychange', releaseAll);
     bindTouch();
     bindSplitGrip();
+    bindShortcutsToggle();
 
     const modeIds = ['modePoint', 'modeBilinear', 'modeTrilinear'];
     modeIds.forEach(function (id, index) {
       $(id).addEventListener('click', function () { setMode(index); });
+      /* APG radiogroup: arrows move the selection inside the group, and the
+         stopPropagation keeps the arrow out of the driving controls. */
+      $(id).addEventListener('keydown', function (event) {
+        let next = -1;
+        if (event.code === 'ArrowRight' || event.code === 'ArrowDown') next = (index + 1) % modeIds.length;
+        else if (event.code === 'ArrowLeft' || event.code === 'ArrowUp') next = (index + modeIds.length - 1) % modeIds.length;
+        else if (event.code === 'Home') next = 0;
+        else if (event.code === 'End') next = modeIds.length - 1;
+        if (next < 0) return;
+        event.preventDefault();
+        if (event.stopPropagation) event.stopPropagation();
+        setMode(next);
+        const target = $(modeIds[next]);
+        if (target && target.focus) target.focus();
+      });
     });
     $('split').addEventListener('input', function () { setSplit(parseFloat($('split').value) / 100); });
     $('btnStart').addEventListener('click', function () { newRace('player'); });

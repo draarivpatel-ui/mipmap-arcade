@@ -1103,10 +1103,17 @@
   /* Input packing and ghost replay                                      */
   /* ------------------------------------------------------------------ */
 
+  /* Truthy non-numbers would NaN through the pack math, so every channel is
+     coerced to a finite number first; anything else counts as zero. */
+  function chan(v) {
+    const n = +v;
+    return Number.isFinite(n) ? n : 0;
+  }
+
   function quantizeInput(input) {
-    const steerQ = Math.round(clamp(input.steer || 0, -1, 1) * 127);
-    const throttleQ = Math.round(clamp(input.throttle || 0, 0, 1) * 15);
-    const brakeQ = Math.round(clamp(input.brake || 0, 0, 1) * 15);
+    const steerQ = Math.round(clamp(chan(input.steer), -1, 1) * 127);
+    const throttleQ = Math.round(clamp(chan(input.throttle), 0, 1) * 15);
+    const brakeQ = Math.round(clamp(chan(input.brake), 0, 1) * 15);
     return {
       steer: steerQ / 127,
       throttle: throttleQ / 15,
@@ -1117,9 +1124,9 @@
 
   /** 17 bits: steer 8, throttle 4, brake 4, drift 1. */
   function packInput(input) {
-    const steerQ = Math.round(clamp(input.steer || 0, -1, 1) * 127);
-    const throttleQ = Math.round(clamp(input.throttle || 0, 0, 1) * 15);
-    const brakeQ = Math.round(clamp(input.brake || 0, 0, 1) * 15);
+    const steerQ = Math.round(clamp(chan(input.steer), -1, 1) * 127);
+    const throttleQ = Math.round(clamp(chan(input.throttle), 0, 1) * 15);
+    const brakeQ = Math.round(clamp(chan(input.brake), 0, 1) * 15);
     return (steerQ + 127) | (throttleQ << 8) | (brakeQ << 12) | ((input.drift ? 1 : 0) << 16);
   }
 
@@ -1133,6 +1140,10 @@
   }
 
   const GHOST_MAGIC = [0x4C, 0x5A, 0x47, 0x31];
+  /* A ghost is one packed input per fixed 120 Hz tick. Five hours of inputs is
+     far beyond a three lap race, and bounding the decode keeps a hostile or
+     corrupt base64 blob from forcing a giant allocation and fill loop. */
+  const GHOST_MAX_FRAMES = 2160000;
 
   function writeVarint(out, value) {
     let v = value >>> 0;
@@ -1187,6 +1198,8 @@
     const seed = readVarint(bytes, cursor);
     const total = readVarint(bytes, cursor);
     const runCount = readVarint(bytes, cursor);
+    if (total > GHOST_MAX_FRAMES) throw new RangeError('ghost replay is too long');
+    if (runCount > total) throw new RangeError('ghost replay has more runs than frames');
     const frames = new Array(total);
     let filled = 0;
     for (let r = 0; r < runCount; r++) {
@@ -1232,6 +1245,10 @@
   };
 
   function createRace(seed, options) {
+    /* Seeds are uint32 everywhere downstream (mulberry32 and the ghost encoder
+       both truncate with >>> 0), so normalize once here instead of letting a
+       2^32 seed produce a race whose replay can never verify. */
+    seed = seed >>> 0;
     const o = Object.assign({}, options || {});
     const track = generateTrackCircuit(seed, o.track);
     const start = pointAtDistance(track, track.length - RACE.startOffset);
@@ -1280,7 +1297,11 @@
     const step = dt || FIXED_DT;
     const events = [];
     const input = quantizeInput(rawInput);
-    race.inputLog.push(packInput(input));
+    /* The log is the ghost: frames after the finish are automatic braking, not
+       driving, and a parked tab would otherwise grow it forever. */
+    if (race.phase !== 'finished' && race.inputLog.length < GHOST_MAX_FRAMES) {
+      race.inputLog.push(packInput(input));
+    }
     race.tick++;
 
     let applied = input;
@@ -1675,6 +1696,7 @@
     unpackInput: unpackInput,
     encodeGhostReplay: encodeGhostReplay,
     decodeGhostReplay: decodeGhostReplay,
+    GHOST_MAX_FRAMES: GHOST_MAX_FRAMES,
     bytesToBase64: bytesToBase64,
     base64ToBytes: base64ToBytes,
     createRace: createRace,

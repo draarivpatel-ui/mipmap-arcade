@@ -63,7 +63,6 @@ body {
 }
 
 html {
-  scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -77,8 +76,12 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
@@ -445,10 +448,30 @@ main {
 }
 
 .keys-help {
-  margin: 0 0 var(--space-3);
+  margin: 0 0 var(--space-2);
   color: var(--ink-2);
   font-size: 0.92rem;
   max-width: 62ch;
+}
+
+.keys-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  margin: 0 0 var(--space-3);
+  color: var(--ink-2);
+  font-size: 0.92rem;
+  cursor: pointer;
+  max-width: 62ch;
+}
+
+.keys-toggle input {
+  accent-color: var(--cyan);
+}
+
+.keys-toggle-note {
+  color: var(--ink-2);
+  font-size: 0.85rem;
 }
 
 /* Touch controls ------------------------------------------------------ */

@@ -102,3 +102,19 @@ test('lab: pixel footprint matches the Jacobian used by the rasterizer', () => {
   const centre = E.labPixelFootprint(cfg, base, cfg.width / 2 - 0.5, cfg.horizonY + 4);
   assert.ok(off.lambda >= centre.lambda - 1e-9, 'off-axis pixels never read a finer level than the centre of the row');
 });
+
+test('lab: a band with zero pixels reports null rmse and psnr, not Infinity', () => {
+  const emptyNear = E.measureFilterAliasing(detail, Object.assign({}, FAST, { nearMax: -10 }));
+  assert.equal(emptyNear.bands[0].pixels, 0, 'near band is empty');
+  for (const m of emptyNear.modes) {
+    assert.equal(m.rmse.near, null, m.name + ' rmse.near');
+    assert.equal(m.psnr.near, null, m.name + ' psnr.near');
+    assert.ok(m.rmse.far !== null, m.name + ' rmse.far populated');
+  }
+  const emptyFar = E.measureFilterAliasing(detail, Object.assign({}, FAST, { midMax: 100 }));
+  assert.equal(emptyFar.bands[2].pixels, 0, 'far band is empty');
+  for (const m of emptyFar.modes) {
+    assert.equal(m.rmse.far, null, m.name + ' rmse.far');
+    assert.equal(m.psnr.far, null, m.name + ' psnr.far');
+  }
+});

@@ -1857,3 +1857,134 @@ test('the pace car slows for tighter corners than for straights', () => {
   }
   assert.ok(speedFor(tightS) < speedFor(wideS), 'tight ' + speedFor(tightS) + ' wide ' + speedFor(wideS));
 });
+
+test('the detail texture checker alternates parity and grid lines cut the luminance', () => {
+  const t = E.generateDetailTexture(64, 5);
+  const cell = 64 >> 4;
+  const lum = (x, y) => t.data[(y * 64 + x) * 4];
+  let even = 0;
+  let odd = 0;
+  let evenN = 0;
+  let oddN = 0;
+  for (let cy = 0; cy < 16; cy++) {
+    for (let cx = 0; cx < 16; cx++) {
+      let sum = 0;
+      for (let y = cy * cell + 1; y < cy * cell + cell; y++) {
+        for (let x = cx * cell + 1; x < cx * cell + cell; x++) sum += lum(x, y);
+      }
+      if (((cx + cy) & 1) === 0) { even += sum; evenN += cell - 1; }
+      else { odd += sum; oddN += cell - 1; }
+    }
+  }
+  const evenMean = even / evenN;
+  const oddMean = odd / oddN;
+  assert.ok(evenMean - oddMean > 30, 'even cells are brighter: ' + evenMean + ' vs ' + oddMean);
+  assert.ok(lum(1, 1) - lum(0, 1) > 20, 'vertical grid line at x%cell===0 darkens the column');
+  assert.ok(lum(1, 1) - lum(1, 0) > 20, 'horizontal grid line at y%cell===0 darkens the row');
+});
+
+test('the kerb alternates red and white every five units of arc', () => {
+  /* Synthetic fields: distance is |wy| so the road is a horizontal strip with
+     a wide kerb band at 9 < |wy| < 14; arc is 3 * wy so the five-unit parity
+     flips inside a single screen row. camH and focal are picked so the kerb
+     pixels sit on rows where the anisotropic footprint is still narrow enough
+     for full coverage. */
+  const size = 64;
+  const dist = new Float32Array(size * size);
+  const sArc = new Float32Array(size * size);
+  for (let gy = 0; gy < size; gy++) {
+    for (let gx = 0; gx < size; gx++) {
+      dist[gy * size + gx] = Math.abs(-32 + (gy + 0.5));
+      sArc[gy * size + gx] = 3 * (-32 + (gy + 0.5));
+    }
+  }
+  const synthFields = { size: size, originX: -32, originY: -32, cell: 1, dist: dist, s: sArc };
+  const W = 96;
+  const H = 54;
+  const camH = 2;
+  const focal = 36;
+  const horizonY = H * 0.42;
+  const target = E.createRenderTarget(W, H);
+  const scene = {
+    cameraX: 0, cameraY: 0, cameraHeading: 0, cameraHeight: camH,
+    focal: focal,
+    horizonY: horizonY,
+    pyramid: E.buildMipmapPyramid(E.generateDetailTexture(128, 5)),
+    fields: synthFields,
+    palette: {
+      skyTop: [10, 20, 30], skyHorizon: [200, 210, 220], fog: [210, 205, 190],
+      grass: [60, 160, 60], asphalt: [40, 40, 50], kerbA: [220, 40, 20], kerbB: [240, 240, 240], dash: [250, 250, 250]
+    },
+    mode: E.SAMPLE_BILINEAR,
+    textureScale: 1 / 24,
+    halfWidth: 9,
+    kerbWidth: 5,
+    fogDistance: 1e9
+  };
+  E.renderGround(target, scene);
+  let kerbPixels = 0;
+  let redSeen = 0;
+  let whiteSeen = 0;
+  for (let y = Math.ceil(horizonY); y < H; y++) {
+    const dy = y + 0.5 - horizonY;
+    /* Only rows where the footprint is narrow enough for full kerb coverage
+       and where z stays inside the field grid (wx < 31.5). */
+    if (dy < 6 || dy > 8.5) continue;
+    const z = camH * focal / dy;
+    if (z > 31) continue;
+    for (let x = 0; x < W; x++) {
+      const dx = x + 0.5 - W / 2;
+      const wy = -(dx * z / focal);
+      if (Math.abs(wy) < 10.4 || Math.abs(wy) > 13.2) continue;
+      /* replicate fieldNearestArc: nearest grid cell along wy */
+      const gy = Math.min(size - 1, Math.max(0, Math.floor(wy + 32)));
+      const arc = 3 * (-32 + gy + 0.5);
+      const frac = ((arc / 5) % 1 + 1) % 1;
+      if (frac < 0.3 || frac > 0.7) continue;
+      const i = (y * W + x) * 4;
+      const ratio = target.rgba[i] / (target.rgba[i + 1] + 1);
+      const isRed = ratio > 2.2;
+      const expectRed = (Math.floor(arc / 5) & 1) === 0;
+      assert.equal(isRed, expectRed, 'pixel ' + x + ',' + y + ' arc ' + arc + ' ratio ' + ratio.toFixed(2));
+      kerbPixels++;
+      if (isRed) redSeen++; else whiteSeen++;
+    }
+  }
+  assert.ok(kerbPixels >= 6, 'found ' + kerbPixels + ' kerb pixels to check');
+  assert.ok(redSeen > 0 && whiteSeen > 0, 'both kerb colours appeared: ' + redSeen + ' red, ' + whiteSeen + ' white');
+});
+
+
+
+/* ----------------------------------------- adversarial pass 2 regressions */
+
+test('seeds normalize to uint32 so huge seeds replay identically', () => {
+  const a = E.createRace(4294967296, { laps: 1 });
+  assert.equal(a.seed, 0, '2^32 wraps to 0');
+  const b = E.createRace(0, { laps: 1 });
+  assert.deepEqual(a.track.gates, b.track.gates, 'wrapped seed builds the same track');
+  const c = E.createRace(-1, { laps: 1 });
+  assert.equal(c.seed, 4294967295);
+});
+
+test('non-numeric input channels coerce to zero instead of leaking NaN', () => {
+  const race = E.createRace(2026, { laps: 1 });
+  for (let i = 0; i < 300; i++) {
+    E.stepRace(race, { steer: 'yes', throttle: { valueOf: 1 }, brake: Infinity, drift: 'x' }, E.FIXED_DT);
+  }
+  for (const v of [race.car.x, race.car.y, race.car.vx, race.car.vy, race.car.heading]) {
+    assert.ok(Number.isFinite(v), 'car state stayed finite');
+  }
+  for (const p of race.inputLog) assert.ok(Number.isFinite(p), 'logged input stayed finite');
+});
+
+test('inputLog stops growing once the race finishes', () => {
+  const race = E.createRace(2026, { laps: 1 });
+  for (let i = 0; i < 120 * 200 && race.phase !== 'finished'; i++) {
+    E.stepRace(race, E.computePaceInput(race), E.FIXED_DT);
+  }
+  assert.equal(race.phase, 'finished');
+  const len = race.inputLog.length;
+  for (let i = 0; i < 50; i++) E.stepRace(race, { steer: 0, throttle: 1, brake: 0, drift: false }, E.FIXED_DT);
+  assert.equal(race.inputLog.length, len, 'post-finish frames are not logged');
+});
